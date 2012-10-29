@@ -249,22 +249,6 @@
                       res)))
               (loop (cdr p) (append results res*)))))))))
 
-;        (let loop2 ((res (sel s p o))
-;                    (results* '()))
-;          (if (null? res)
-;            (loop1 (cdr p) (cons (reverse results*) results))
-;            (let* ((p* (car p))
-;                   (res (sel s p* (car o*))))
-;              (if (null? res)
-;                (loop2 (cdr o*) results*)
-;                (loop2 (cdr o*) (cons (cons p* res) results*))))))))))
-
-;    (map
-;      (lambda (p)
-;        (map
-;          (lambda (o*) (list p o*))
-;          (sel s p o)))
-;      p+)))
 
 (define (select:s:* s _ o)
   (select:s:p+ s (redis-hkeys s) o))
@@ -297,13 +281,6 @@
                       res)))
               (loop (cdr s) (append results res*)))))))))
                         
-;    (map
-;      (lambda (s)
-;        (map
-;          (lambda (po) (cons s po))
-;          (sel s p o)))
-;      s+)))
-
 (define (select:s s p o)
   (let ((sel (get-p-sel p)))
     (map
@@ -358,9 +335,6 @@
 
 ;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
 
-
-(define (init dbname)
-  (redex-init dbname))
 
 )
 
