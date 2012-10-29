@@ -1,15 +1,15 @@
 ;;; sukkiri.scm -- A metadata store based on Redis
 
-(module sukkiri *
-;        (add-triple
-;         update-triple
-;         delete-triple
-;         select
-;         init
-;         :>
-;         :>>
-;         :-
-;         :<)
+(module sukkiri
+        (add-triple
+         update-triple
+         delete-triple
+         select
+         init
+         :>
+         :>>
+         :-
+         :<)
 
         (import scheme)
         (import chicken)
@@ -18,10 +18,6 @@
         (import redis-extras)
         (import srfi-1)
 
-(define S 1)
-(define P 2)
-(define O 4)
-(define ALL (bitwise-ior S P O))
 
 (define (add-triple s p o)
   (redis-transaction
