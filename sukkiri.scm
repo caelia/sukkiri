@@ -41,14 +41,14 @@
 
 
 
-;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
-;;; --  UTILITY FUNCTIONS  -----------------------------------------------------
+;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+;;; --  UTILITY FUNCTIONS  ---------------------------------------------
 
 (define (debug-msg . msgs)
   (when (*redis-extras-debug*)
     (apply print msgs)))
 
-;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
 
 
 
@@ -146,14 +146,6 @@
     ((string=? s "F") #f)
     (else (error (sprintf "String '~A' does not represent a boolean.")))))
 
-(define (obj->string obj)
-  (with-output-to-string
-    (lambda () (serialize obj))))
-
-(define (string->obj s)
-  (with-input-from-string s
-    (lambda () (deserialize))))
-
 (define (any->dbstring obj)
   (let* ((prefix+conv
            (cond
@@ -166,10 +158,16 @@
               (cons #\L store-indirect-list))
              ((hash-table? obj)
               (cons #\H store-indirect-hash))
-             (else (cons #\O obj->string))))
-         (prefix (car prefix+conv))
-         (converter (cdr prefix+conv)))
-    (list->string (cons prefix (string->list (converter obj))))))
+             (else #f)))
+         (prefix
+           (and prefix+conv
+                (car prefix+conv)))
+         (converter
+           (and prefix+conv
+                (cdr prefix+conv))))
+    (and prefix
+         converter
+         (list->string (cons prefix (string->list (converter obj)))))))
 
 (define (dbstring->any s)
   (let ((first (string-ref s 0))
@@ -182,7 +180,6 @@
       ((#\s) rest)
       ((#\L) (retrieve-indirect-list rest))
       ((#\H) (retrieve-indirect-hash rest))
-      ((#\O) (string->obj rest))
       (else (error "Unknown data type.")))))
 
 ;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
