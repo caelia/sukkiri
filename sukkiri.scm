@@ -4,8 +4,8 @@
         (add-triple
          update-triple
          delete-triple
-         select
-         init
+         query
+         select-db
          :>
          :>>
          :-
@@ -101,21 +101,22 @@
       (redis-select idx)
       (thunk))))
 
-(define (redex-init #!optional app-id #!key (host (*default-host*)) (port (*default-port*)))
-  (debug-msg "redex-init")
+(define (select-db #!optional app-id
+                   #!key (host (*default-host*)) (port (*default-port*)))
+  (debug-msg "select-db")
   (when (not (*connected*))
-    (debug-msg "redex-init: not connected")
+    (debug-msg "select-db: not connected")
     (redis-connect host port)
-    (debug-msg "redex-init: redis-connect done")
+    (debug-msg "select-db: redis-connect done")
     (*connected* #t))
-  (debug-msg "redex-init: connected")
+  (debug-msg "select-db: connected")
   (redis-select "0")
-  (debug-msg "redex-init: select db 0")
+  (debug-msg "select-db: select db 0")
   (let ((in-use-exists (redis-exists "dbs-in-use")))
-    (debug-msg "redex-init: test for 'dbs-in-use'")
+    (debug-msg "select-db: test for 'dbs-in-use'")
     (debug-msg "is 'dbs-in-use' a number?" (number? (car in-use-exists)))
     (when (= (car in-use-exists) 0)
-      (debug-msg "redex-init: dbs-in-use does not exist; need to add it")
+      (debug-msg "select-db: dbs-in-use does not exist; need to add it")
       (redis-sadd "dbs-in-use" "0"))
     (debug-msg "'in-use-exists' now exists")
     (if app-id
@@ -204,33 +205,33 @@
   (when (null? (redis-hkeys s))
     (redis-srem "@SUBJECTS" s)))
 
-(define (select:s:p:* s p _)
+(define (query:s:p:* s p _)
   (redis-hget s p))
 
-(define (select:s:p:o s p o)
+(define (query:s:p:o s p o)
   (let ((db-result (car (redis-hget s p))))
     (cond
       ((null? db-result) '())
       ((string=? db-result o) (list db-result))
       (else '()))))
 
-(define (select:s:p:o+ s p o+)
+(define (query:s:p:o+ s p o+)
   (let loop ((o o+)
              (results '()))
     (if (null? o)
       (reverse results)
-      (let ((res (select:s:p:o s p (car o))))
+      (let ((res (query:s:p:o s p (car o))))
         (if (null? res)
           (loop (cdr o) results)
           (loop (cdr o) (cons (car res) results)))))))
 
 (define (get-o-sel o)
   (cond
-    ((list? o) select:s:p:o+)
-    ((string=? o "*") select:s:p:*)
-    (else select:s:p:o)))
+    ((list? o) query:s:p:o+)
+    ((string=? o "*") query:s:p:*)
+    (else query:s:p:o)))
 
-(define (select:s:p+ s p+ o)
+(define (query:s:p+ s p+ o)
   (let ((sel (get-o-sel o)))
     (let loop ((p p+)
                (results '()))
@@ -247,10 +248,10 @@
               (loop (cdr p) (append results res*)))))))))
 
 
-(define (select:s:* s _ o)
-  (select:s:p+ s (redis-hkeys s) o))
+(define (query:s:* s _ o)
+  (query:s:p+ s (redis-hkeys s) o))
 
-(define (select:s:p s p o)
+(define (query:s:p s p o)
   (let ((sel (get-o-sel o)))
     (map
       (lambda (o*) (list p o*))
@@ -258,11 +259,11 @@
 
 (define (get-p-sel p)
   (cond
-    ((list? p) select:s:p+)
-    ((string=? p "*") select:s:*)
-    (else select:s:p)))
+    ((list? p) query:s:p+)
+    ((string=? p "*") query:s:*)
+    (else query:s:p)))
 
-(define (select:s+ s+ p o)
+(define (query:s+ s+ p o)
   (let ((sel (get-p-sel p)))
     (let loop ((s s+)
                (results '()))
@@ -278,7 +279,7 @@
                       res)))
               (loop (cdr s) (append results res*)))))))))
                         
-(define (select:s s p o)
+(define (query:s s p o)
   (let ((sel (get-p-sel p)))
     (map
       (lambda (po) (cons s po))
@@ -296,8 +297,8 @@
 (define (all-hash-keys)
   (redis-smembers "@SUBJECTS"))
 
-(define (select:* _ p o)
-  (select:s+ (all-hash-keys) p o))
+(define (query:* _ p o)
+  (query:s+ (all-hash-keys) p o))
 
 (define (filter-result res filter-spec unique)
   (let ((f
@@ -315,12 +316,12 @@
       (f (map f res))
       (else '()))))
 
-(define (select s p o #!key (filter 'all) (unique #t))
+(define (query s p o #!key (filter 'all) (unique #t))
   (let* ((sel
            (cond
-             ((list? s) select:s+)
-             ((string=? s "*") select:*)
-             (else select:s)))
+             ((list? s) query:s+)
+             ((string=? s "*") query:*)
+             (else query:s)))
          (res (sel s p o)))
     (filter-result res filter unique)))
 
@@ -328,7 +329,7 @@
 (define :> add-triple)
 (define :>> update-triple)
 (define :- delete-triple)
-(define :< select)
+(define :< query)
 
 ;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
 
