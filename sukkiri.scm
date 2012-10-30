@@ -55,6 +55,12 @@
 ;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
 ;;; --  AUTOMATIC DB ALLOCATION  ---------------------------------------
 
+(define (set-total-dbs)
+  ;; This query works w/ Redis 2.6, not 2.4.
+  (let ((result (redis-config "get" "databases")))
+    (when (not (null? result))
+      (*total-dbs* (string->number (cadr result))))))
+
 (define (first-available-index indices)
   (let ((indices* (map string->number indices))
         (last-idx (- (*total-dbs*) 1)))
@@ -110,6 +116,7 @@
     (debug-msg "select-db: redis-connect done")
     (*connected* #t))
   (debug-msg "select-db: connected")
+  (set-total-dbs)
   (redis-select "0")
   (debug-msg "select-db: select db 0")
   (let ((in-use-exists (redis-exists "dbs-in-use")))
@@ -138,6 +145,60 @@
 ;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
 ;;; --  GENERIC STORAGE PROTOCOL  --------------------------------------
 
+(define (generate-anon-id)
+  (let ((base-id (redis-incr "@ANON-ID")))
+    (sprintf "@ANONYMOUS:~A" (car base-id))))
+
+(define (anon-refcount++ id)
+  (redis-hincrby "@ANON-REFCOUNT" id "1"))
+
+;; When there are multiple references to the object, the refcount is
+;;   simply decreased by 1. When there is only 1 reference, the object
+;;   is deleted. This is analogous to reference-count-base garbage
+;;   collection systems.
+(define (anon-refcount-- id)
+  (let* ((result (redis-hget "@ANON-REFCOUNT" id))
+         (current (string->number (car result))))
+    (if (<= current 1)
+      (begin
+        (redis-del id)
+        (redis-hdel "@ANON-REFCOUNT" id))
+      (redis-hincrby "@ANON-REFCOUNT" id "-1"))))
+
+(define (store-hash-table id ht)
+  (hash-table-walk
+    ht
+    (lambda (k v)
+      (redis-hset id k (prepare-value v)))))
+
+(define (store-list id lst)
+  (for-each
+    (lambda (elt)
+      (redis-lpush id (prepare-value elt)))
+    lst))
+
+(define (store-set id set)
+  (set-for-each
+    (lambda (elt)
+      (redis-sadd id (prepare-value elt)))
+    set))
+
+(define (store-anonymous-object f obj)
+  (let* ((id (generate-anon-id))
+         (stored (f id obj)))
+    (when stored
+      (anon-refcount++ id)
+      id)))
+
+(define (store-anonymous-hash obj)
+  (store-anonymous-object obj store-hash-table))
+
+(define (store-anonymous-list obj)
+  (store-anonymous-object store-list obj))
+
+(define (store-anonymous-set obj)
+  (store-anonymous-object store-set obj))
+
 (define (boolean->string b)
   (if b "T" "F"))
 
@@ -147,7 +208,7 @@
     ((string=? s "F") #f)
     (else (error (sprintf "String '~A' does not represent a boolean.")))))
 
-(define (any->dbstring obj)
+(define (prepare-value obj)
   (let* ((prefix+conv
            (cond
              ((null? obj) (cons #\- (lambda (_) "")))
@@ -156,9 +217,11 @@
              ((char? obj) (cons #\c ->string))
              ((string? obj) (cons #\s identity))
              ((list? obj)
-              (cons #\L store-indirect-list))
+              (cons #\L store-anonymous-list))
              ((hash-table? obj)
-              (cons #\H store-indirect-hash))
+              (cons #\H store-anonymous-hash))
+             ((set? obj)
+              (cons #\S store-anonymous-set))
              (else #f)))
          (prefix
            (and prefix+conv
@@ -179,8 +242,9 @@
       ((#\n) (string->number rest))
       ((#\c) (string-ref rest 0))
       ((#\s) rest)
-      ((#\L) (retrieve-indirect-list rest))
-      ((#\H) (retrieve-indirect-hash rest))
+      ((#\L) (retrieve-anonymous-list rest))
+      ((#\H) (retrieve-anonymous-hash rest))
+      ((#\S) (retrieve-anonymous-set rest))
       (else (error "Unknown data type.")))))
 
 ;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
