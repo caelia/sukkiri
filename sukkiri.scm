@@ -165,6 +165,43 @@
         (redis-hdel "@ANON-REFCOUNT" id))
       (redis-hincrby "@ANON-REFCOUNT" id "-1"))))
 
+;;; ====================================================================
+
+(define (create-edge name from to)
+  (let ((id (generate-anon-id)))
+    (redis-transaction
+      (redis-hset id "name" name)
+      (redis-hset id "from" from)
+      (redis-hset id "to" to)
+      (redis-sadd name id))
+    id))
+
+(define (create-literal-object-node content)
+  (let ((id (generate-anon-id)))
+    (redis-set id content)
+    id))
+
+(define (create-structured-node id content)
+  (let ((content*
+          (if (hash-table? content)
+            (hash-table->alist content)
+            content)))
+    (for-each
+      (lambda (elt)
+        (let ((field (car elt))
+              ((value (cdr elt)))
+          (if (string? value)
+            (let ((val-id (create-literal-object-node value)))
+              (create-edge name id val-id))
+            ;;; Don't think we want to use field name as ID here!!
+            (let ((val-id (create-structured-node field value)))
+              (create-edge name id val-id))))))
+      content*))
+  id)
+
+
+
+;;; ====================================================================
 (define (store-hash-table id ht)
   (hash-table-walk
     ht
