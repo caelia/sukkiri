@@ -1,11 +1,118 @@
 ;;; sukkiri.scm -- A metadata store based on Redis
+;;;   Copyright © 2012 by Matt Gushee <matt@gushee.net>
+;;;   This program is open-source software, released under the
+;;;   BSD License. See the accompanying LICENSE file for details.
+;;;
+;;; The Sukkiri Data Model
+;;; ======================
+;;;
+;;; Sukkiri works with 3 primary types of entities, known as Resources,
+;;; Properties, and Literals. They are intended to be compatible with
+;;; RDF, though they do not provide a complete RDF model out of the
+;;; box. There are also built-in indexes to facilitate efficient
+;;; searching and graph traversal. In addition, users may add their
+;;; own metaproperties and indexes to model arbitrary semantics.
+;;;
+;;; Resource
+;;; --------
+;;; A structured node having an ID and one or more named properties. 
+;;; A resource is stored as a Redis hash; the name of each field maps
+;;; to a property name, and the value is a system-generated ID that
+;;; refers to a Sukkiri Property. In RDF, a Resource may represent
+;;; either the subject or the object of a statement; its Redis key
+;;; (i.e., the ID) should be the URI of the resource, though Sukkiri
+;;; does not enforce this or any other RDF requirement.
+;;;
+;;; Property
+;;; --------
+;;; A property represents, in basic graph terminology, an edge. It is
+;;; implemented as a Redis hash with 3 fields: 'name', which represents
+;;; the property name, 'from', and 'to', which represent, respectively,
+;;; the entities that the edge points from and to. The reason for
+;;; implementing properties in this way is so that each Redis key 
+;;; representing a Property corresponds to exactly one relationship in
+;;; the data model; whereas it would be problematic to use the property
+;;; name as the key, since many data models will contain multiple 
+;;; relationships with the same property name.
+;;;
+;;; The 'name' field of a property is a string supplied by the user; the
+;;; 'from' field should be the ID (Redis key) of a Resource node, and
+;;; the 'to' field should be the ID of a Resource node, Literal node,
+;;; or Property. Note that when 'from' and 'to' both refer to Resource
+;;; nodes, a complete triple can be obtained by querying a single
+;;; Property.
+;;;
+;;; Literal
+;;; -------
+;;; A literal is an anonymous unit of content. It is stored under a
+;;; system-generated key, its contents being a string, a list, a set,
+;;; or an ordered set. A literal can serve only as the object of an
+;;; RDF statement.
+;;;
+;;; Sukkiri provides 4 storage formats for the data stored in literals:
+;;; 'plain-string', 'tagged-string' (the default), 'object', and
+;;; 'string-or-object'. See Storage Formats below for more information.
+;;;
+;;; Indexes
+;;; -------
+;;; Several built-in indexes are provided; they are stored as Redis sets. 
+;;; 'Resources' contains the IDs of all Resources, and Literals contains
+;;; the IDs of all Literals. There is also a 'Prop:*' index for each
+;;; Property name, where '*' stands for the property name.
+;;;
+;;; User Indexes & Metaproperties
+;;; -----------------------------
+;;; See the procedures CREATE-USER-INDEX and ATTACH-METAPROPERTY for
+;;; more information.
+;;;
+;;; Storage Formats
+;;; ---------------
+;;; When setting up a Sukkiri datastore, you must choose one of the
+;;; following, to be used for all literal objects.
+;;;
+;;;  * tagged-string (default): when you attempt to store an object,
+;;;    the system will detect its type, convert it to a string, and
+;;;    prefix the resulting string with a 1-character tag indicating
+;;;    the original type. When retrieving an object, the tag will be
+;;;    read and the remainder of the data will be converted back to
+;;;    the type specified by the tag. The following types are
+;;;    supported:
+;;;      
+;;;      string
+;;;      number
+;;;      boolean
+;;;      date (SRFI-19)
+;;;      MORE?
+;;;
+;;;  * plain-string: no conversions are performed; all data is assumed
+;;;    to be strings. If you know all your data are strings, this is
+;;;    the most efficient format to use.
+;;;
+;;;  * object: all objects are serialized and deserialized using the
+;;;    s11n extension.
+;;;
+;;;  * string-or-object: this is a hybrid of 'tagged-string' and
+;;;    'object'. If an object is of a type supported by the 'tagged-
+;;;    string' format, it is converted to a string; otherwise, it is
+;;;    serialized (and tagged).
+;;;
+;;; DB Administration & Sessions
+;;; ============================
+;;; Although you may use Sukkiri to store and query data with a simple
+;;; connection to any Redis server (i.e., using REDIS-CONNECT from
+;;; the redis-client extension, you may wish to segregate your data
+;;; from other applications that may be using the same server. To
+;;; facilitate this process, this library provides the INIT-SUKKIRI-DBS,
+;;; START-SUKKIRI-SERVER, and OPEN-SUKKIRI-DB procedures. The egg also
+;;; includes the 'sukkiri-admin' program, which provides a command-line
+;;; interface to the first two of these procedures.
 
 (module sukkiri
         (add-triple
          update-triple
          delete-triple
          query
-         select-db
+         open-session
          :>
          :>>
          :-
@@ -34,6 +141,8 @@
 (define *connected* (make-parameter #f))
 
 (define *current-app* (make-parameter #f))
+
+(define *storage-format* (make-parameter 'tagged-string))
 
 (define *redis-extras-debug* (make-parameter #f))
 
@@ -107,23 +216,23 @@
       (redis-select idx)
       (thunk))))
 
-(define (select-db #!optional app-id
+(define (open-session #!optional app-id
                    #!key (host (*default-host*)) (port (*default-port*)))
-  (debug-msg "select-db")
+  (debug-msg "open-session")
   (when (not (*connected*))
-    (debug-msg "select-db: not connected")
+    (debug-msg "open-session: not connected")
     (redis-connect host port)
-    (debug-msg "select-db: redis-connect done")
+    (debug-msg "open-session: redis-connect done")
     (*connected* #t))
-  (debug-msg "select-db: connected")
+  (debug-msg "open-session: connected")
   (set-total-dbs)
   (redis-select "0")
-  (debug-msg "select-db: select db 0")
+  (debug-msg "open-session: select db 0")
   (let ((in-use-exists (redis-exists "dbs-in-use")))
-    (debug-msg "select-db: test for 'dbs-in-use'")
+    (debug-msg "open-session: test for 'dbs-in-use'")
     (debug-msg "is 'dbs-in-use' a number?" (number? (car in-use-exists)))
     (when (= (car in-use-exists) 0)
-      (debug-msg "select-db: dbs-in-use does not exist; need to add it")
+      (debug-msg "open-session: dbs-in-use does not exist; need to add it")
       (redis-sadd "dbs-in-use" "0"))
     (debug-msg "'in-use-exists' now exists")
     (if app-id
@@ -290,6 +399,25 @@
 
 ;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
 ;;; --  LOW-LEVEL QUERY API  -------------------------------------------
+
+(define (create-literal-node id content)
+  (redis-setnx id content))
+
+(define (create-property id name from to)
+  (redis-transaction
+    (redis-hsetnx id "name" name)
+    (redis-hsetnx id "from" from)
+    (redis-hsetnx id "to" to)
+    (redis-sadd "name" id)))
+
+(define (create-resource id props)
+  (redis-transaction
+    (for-each
+      (lambda (p)
+        (let ((fld (car p))
+              (val (cdr p)))
+          (redis-hsetnx id fld val)))
+      props)))
 
 (define (add-triple s p o)
   (redis-transaction
