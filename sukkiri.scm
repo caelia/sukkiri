@@ -49,9 +49,7 @@
 
 (define *current-app* (make-parameter #f))
 
-(define *storage-format* (make-parameter 'tagged-string))
-
-(define *redis-extras-debug* (make-parameter #f))
+(define *sukkiri-debug* (make-parameter #f))
 
 ;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
 
@@ -61,8 +59,10 @@
 ;;; --  UTILITY FUNCTIONS  ---------------------------------------------
 
 (define (debug-msg . msgs)
-  (when (*redis-extras-debug*)
-    (apply print msgs)))
+  (when (*sukkiri-debug*)
+    (with-output-to-port
+      (current-error-port)
+      (lambda () (apply print msgs)))))
 
 ;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
 
