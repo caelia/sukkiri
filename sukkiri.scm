@@ -161,9 +161,13 @@
 ;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
 ;;; --  GENERIC STORAGE PROTOCOL  --------------------------------------
 
+(define (generate-node-id)
+  (let ((base-id (redis-incr "@NODE-ID")))
+    (sprintf "@NODE:~X" (car base-id))))
+
 (define (generate-anon-id)
   (let ((base-id (redis-incr "@ANON-ID")))
-    (sprintf "@ANONYMOUS:~A" (car base-id))))
+    (sprintf "@ANONYMOUS:~X" (car base-id))))
 
 (define (anon-refcount++ id)
   (redis-hincrby "@ANON-REFCOUNT" id "1"))
