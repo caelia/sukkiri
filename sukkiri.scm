@@ -169,22 +169,6 @@
   (let ((base-id (redis-incr "@ANON-ID")))
     (sprintf "@ANONYMOUS:~X" (car base-id))))
 
-(define (anon-refcount++ id)
-  (redis-hincrby "@ANON-REFCOUNT" id "1"))
-
-;; When there are multiple references to the object, the refcount is
-;;   simply decreased by 1. When there is only 1 reference, the object
-;;   is deleted. This is analogous to reference-count-base garbage
-;;   collection systems.
-(define (anon-refcount-- id)
-  (let* ((result (redis-hget "@ANON-REFCOUNT" id))
-         (current (string->number (car result))))
-    (if (<= current 1)
-      (begin
-        (redis-del id)
-        (redis-hdel "@ANON-REFCOUNT" id))
-      (redis-hincrby "@ANON-REFCOUNT" id "-1"))))
-
 ;;; ====================================================================
 
 (define (create-edge name from to)
