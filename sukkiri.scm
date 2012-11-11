@@ -294,7 +294,7 @@
   (cond
     ((string=? s "T") #t)
     ((string=? s "F") #f)
-    (else (error (sprintf "String '~A' does not represent a boolean.")))))
+    (else (error (sprintf "String '~A' does not represent a boolean." s)))))
 
 
 (define (prepare-value obj)
@@ -307,8 +307,8 @@
              ((char? obj) (cons #\c ->string))
              ((string? obj) (cons #\s identity))
              ((iref? obj) (cons #\i iref-target))
-             ((xref? obj) (cons #\i xref-target))
-             ((fref? obj) (cons #\i fref-target))
+             ((xref? obj) (cons #\x xref-target))
+             ((fref? obj) (cons #\f fref-target))
              ((list? obj)
               (cons #\L store-anonymous-list))
              ((hash-table? obj)
@@ -336,8 +336,8 @@
       ((#\d) (secstring->date rest))
       ((#\c) (string-ref rest 0))
       ((#\i) (make-iref rest))
-      ((#\i) (make-xref rest))
-      ((#\i) (make-fref rest))
+      ((#\x) (make-xref rest))
+      ((#\f) (make-fref rest))
       ((#\s) rest)
       ((#\L) (retrieve-anonymous-list rest))
       ((#\H) (retrieve-anonymous-hash rest))
