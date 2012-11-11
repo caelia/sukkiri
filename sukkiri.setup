@@ -1,0 +1,6 @@
+(compile -s -d0 -O3 sukkiri.scm -j sukkiri)
+(compile -s -d0 -O3 sukkiri.import.scm)
+(install-extension
+  'sukkiri
+  '("sukkiri.so" "sukkiri.import.so")
+  '((version "0.1")))

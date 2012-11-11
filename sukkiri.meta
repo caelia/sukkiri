@@ -1,0 +1,8 @@
+((egg "sukkiri.egg")
+ (license "BSD")
+ (category db)
+ (depends redis-client)
+ (test-depends test)
+ (files "sukkiri.meta" "sukkiri.setup" "sukkiri.scm" "sukkiri-test.scm")
+ (author "Matt Gushee")
+ (synopsis "A metadata persistence system based on Redis."))
