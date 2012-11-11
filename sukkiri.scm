@@ -15,9 +15,9 @@
 ;;; interface to the first two of these procedures.
 
 (module sukkiri
-        (add-triple
-         update-triple
-         delete-triple
+        (add-prop
+         update-prop
+         delete-prop
          query
          open-session
          :>
@@ -28,12 +28,18 @@
         (import scheme)
         (import chicken)
         (import extras)
-        (import redis-client)
+        (import data-structures)
+        (import ports)
         (import srfi-1)
         (import srfi-69)
 
+        (use redis-client)
+        (use srfi-19)
+        (use numbers)
+        (use sets)
 
-;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  GLOBAL PARAMETERS  ---------------------------------------------
 
 ;; FIXME -- obviously this should not be hard-coded. Need to figure out how
@@ -45,17 +51,44 @@
 
 (define *default-port* (make-parameter 6379))
 
+(define *control-db-idx* (make-parameter "1"))
+
+(define *scratch-db-idx* (make-parameter "0"))
+
 (define *connected* (make-parameter #f))
 
 (define *current-app* (make-parameter #f))
 
 (define *sukkiri-debug* (make-parameter #f))
 
-;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --  DATA TYPES  ----------------------------------------------------
+
+(define-record-type iref (make-iref target) iref?
+                    (target iref-target))
+
+(define-record-printer (iref x out)
+                       (fprintf out "[IREF: ~S :]" (iref-target x)))
+
+(define-record-type xref (make-xref target) xref?
+                    (target xref-target))
+
+(define-record-printer (xref x out)
+                       (fprintf out "[XREF: ~S :]" (xref-target x)))
+
+(define-record-type fref (make-fref target) fref?
+                    (target fref-target))
+
+(define-record-printer (fref x out)
+                       (fprintf out "[FREF: ~S :]" (fref-target x)))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  UTILITY FUNCTIONS  ---------------------------------------------
 
 (define (debug-msg . msgs)
@@ -64,12 +97,31 @@
       (current-error-port)
       (lambda () (apply print msgs)))))
 
-;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+(define (ymd->date y m d)
+  (make-date 0 0 0 0 d m y))
+
+(define (ymdhms->date yr mo dt hr mi #!optional (se 0))
+  (make-date 0 se mi hr dt mo yr))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  AUTOMATIC DB ALLOCATION  ---------------------------------------
+
+(define (init-dbs #!optional (force #f))
+  (let ((db-empty?
+          (lambda () (null? (redis-keys "*")))))
+    (redis-select (*control-db-idx*))
+    (cond
+      ((db-empty?) #t)
+      (force (redis-flushdb))
+      (else (error "Database contains data; unable to initialize.")))
+    (redis-sadd "dbs-in-use" (*control-db-idx*))
+    (redis-sadd "dbs-in-use" (*scratch-db-idx*))
+    (redis-set "@CONTROL-DB" "1")
+    (redis-hset "scratch" "db-index" (*scratch-db-idx*))))
 
 (define (set-total-dbs)
   ;; This query works w/ Redis 2.6, not 2.4.
@@ -80,7 +132,7 @@
 (define (first-available-index indices)
   (let ((indices* (map string->number indices))
         (last-idx (- (*total-dbs*) 1)))
-    (let loop ((i 1))
+    (let loop ((i 2))
       (cond
         ((> i last-idx) #f)
         ((memv i indices*) (loop (+ i 1)))
@@ -88,14 +140,14 @@
 
 (define (get-db-index app-id)
   (debug-msg "get-db-index")
-  (redis-select "0")
+  (redis-select (*control-db-idx*))
   (let ((exists (car (redis-exists app-id))))
     (and (= exists 1)
          (car (redis-hget app-id "db-index")))))
 
 (define (allocate-db app-id)
   (debug-msg "allocate-db")
-  (redis-select "0")
+  (redis-select (*control-db-idx*))
   (let* ((allocated-dbs (redis-smembers "dbs-in-use"))
          (available-index (first-available-index allocated-dbs)))
     (if available-index
@@ -111,7 +163,7 @@
     (redis-transaction
       (redis-select index)
       (redis-flushdb)
-      (redis-select "0")
+      (redis-select (*control-db-idx*))
       (redis-hdel app-id "db-index")
       (redis-srem "dbs-in-use" index))))
 
@@ -124,7 +176,8 @@
       (thunk))))
 
 (define (open-session #!optional app-id
-                   #!key (host (*default-host*)) (port (*default-port*)))
+                   #!key (host (*default-host*)) (port (*default-port*))
+                   (force-init #f))
   (debug-msg "open-session")
   (when (not (*connected*))
     (debug-msg "open-session: not connected")
@@ -133,15 +186,13 @@
     (*connected* #t))
   (debug-msg "open-session: connected")
   (set-total-dbs)
-  (redis-select "0")
-  (debug-msg "open-session: select db 0")
-  (let ((in-use-exists (redis-exists "dbs-in-use")))
-    (debug-msg "open-session: test for 'dbs-in-use'")
-    (debug-msg "is 'dbs-in-use' a number?" (number? (car in-use-exists)))
-    (when (= (car in-use-exists) 0)
-      (debug-msg "open-session: dbs-in-use does not exist; need to add it")
-      (redis-sadd "dbs-in-use" "0"))
-    (debug-msg "'in-use-exists' now exists")
+  (redis-select (*control-db-idx*)) ; Select control DB
+  (debug-msg "open-session: select control db")
+  (let ((rs-exists (redis-exists "@CONTROL-DB")))
+    (when (= (car rs-exists) 0)
+      (debug-msg "open-session: '@CONTROL-DB' doesn't exist")
+      (init-dbs force-init))
+    (debug-msg "dbs initialized")
     (if app-id
       (begin
         (debug-msg "there is an app id")
@@ -154,11 +205,11 @@
           index))
       #t)))
 
-;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  GENERIC STORAGE PROTOCOL  --------------------------------------
 
 (define (generate-node-id)
@@ -170,6 +221,7 @@
     (sprintf "@ANONYMOUS:~X" (car base-id))))
 
 ;;; ====================================================================
+;;; --  Storage  -------------------------------------------------------
 
 (define (store-hash-table id ht)
   (hash-table-walk
@@ -203,14 +255,47 @@
 (define (store-anonymous-set obj)
   (store-anonymous-object store-set obj))
 
+;;; ====================================================================
+;;; --  Retrieval  -----------------------------------------------------
+
+(define (retrieve-anonymous-list id)
+  (let* ((len (car (redis-llen id)))
+         (elts (redis-lrange id "0" (number->string (- len 1)))))
+    (map dbstring->any elts)))
+
+(define (retrieve-anonymous-set id)
+  (let ((mems (redis-smembers id)))
+    (list->set
+      (map dbstring->any mems))))
+
+(define (retrieve-anonymous-hash id)
+  (let ((h (make-hash-table))
+        (fields (redis-hkeys id)))
+    (for-each
+      (lambda (fld)
+        (let ((raw-val (car (redis-hget id fld))))
+          (hash-table-set! h fld (dbstring->any raw-val))))
+      fields)
+    h))
+  
+;;; ====================================================================
+;;; --  Conversion  ----------------------------------------------------
+
 (define (boolean->string b)
   (if b "T" "F"))
+
+(define date->secstring
+  (o number->string inexact->exact time->seconds date->time))
+
+(define secstring->date
+  (o seconds->date string->number))
 
 (define (string->boolean s)
   (cond
     ((string=? s "T") #t)
     ((string=? s "F") #f)
     (else (error (sprintf "String '~A' does not represent a boolean.")))))
+
 
 (define (prepare-value obj)
   (let* ((prefix+conv
@@ -220,9 +305,10 @@
              ((number? obj) (cons #\n number->string))
              ((date? obj) (cons #\d date->secstring))
              ((char? obj) (cons #\c ->string))
-             ((iref? obj) (cons #\i iref->string))
-             ((xref? obj) (cons #\x xref->string))
              ((string? obj) (cons #\s identity))
+             ((iref? obj) (cons #\i iref-target))
+             ((xref? obj) (cons #\i xref-target))
+             ((fref? obj) (cons #\i fref-target))
              ((list? obj)
               (cons #\L store-anonymous-list))
              ((hash-table? obj)
@@ -249,19 +335,20 @@
       ((#\n) (string->number rest))
       ((#\d) (secstring->date rest))
       ((#\c) (string-ref rest 0))
-      ((#\i) (string->iref rest))
-      ((#\x) (string->xref rest))
+      ((#\i) (make-iref rest))
+      ((#\i) (make-xref rest))
+      ((#\i) (make-fref rest))
       ((#\s) rest)
       ((#\L) (retrieve-anonymous-list rest))
       ((#\H) (retrieve-anonymous-hash rest))
       ((#\S) (retrieve-anonymous-set rest))
       (else (error "Unknown data type.")))))
 
-;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  LOW-LEVEL QUERY API  -------------------------------------------
 
 (define (create-literal-node id content)
@@ -283,17 +370,17 @@
           (redis-hsetnx id fld val)))
       props)))
 
-(define (add-triple s p o)
+(define (add-prop s p o)
   (redis-transaction
     (redis-hsetnx s p o)
     (redis-sadd "@SUBJECTS" s)))
 
-(define (update-triple s p o)
+(define (update-prop s p o)
   (redis-transaction
     (redis-hset s p o)
     (redis-sadd "@SUBJECTS" s)))
 
-(define (delete-triple s p)
+(define (delete-prop s p)
   (redis-hdel s p)
   (when (null? (redis-hkeys s))
     (redis-srem "@SUBJECTS" s)))
@@ -419,15 +506,21 @@
     (filter-result res filter unique)))
 
 ;; Useful (?) aliases
-(define :> add-triple)
-(define :>> update-triple)
-(define :- delete-triple)
+(define :> add-prop)
+(define :>> update-prop)
+(define :- delete-prop)
 (define :< query)
 
-;;; }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 )
 
 
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --------------------------------------------------------------------
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
 ;;; ====================================================================
+;;; --------------------------------------------------------------------
