@@ -1,0 +1,10 @@
+<schema>
+  <typedef id="blog-post">
+    <property id="title" type="string" />
+    <property id="subtitle" type="string" />
+    <prop-set id="authors" type="string" cardinality="+" />
+    <property id="timestamp" type="date" />
+    <prop-set id="tags" type="string" cardinality="*" />
+    <property id="content" type="file-ref" />
+  </typedef>
+</schema>
