@@ -66,6 +66,36 @@
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --  FIELD TYPE DEFINITIONS  ----------------------------------------
+
+(define field-types (make-hash-table))
+
+(define-field-type string base-type: string)
+
+(define-field-type number base-type: number)
+
+(define-field-type character base-type: character)
+
+(define-field-type boolean base-type: string)
+
+(define-field-type date base-type: date defined-by: srfi-19
+                   storage-type: string from-string: secstring->date
+                   to-string: date->secstring)
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --  STRUCTURED CONTENT TYPES  --------------------------------------
+
+(define content-types (make-hash-table))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  DATA TYPES  ----------------------------------------------------
 
 (define-record-type iref (make-iref target) iref?
