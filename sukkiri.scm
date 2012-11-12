@@ -18,14 +18,11 @@
         (register-prop-type
          register-resource-type
          xml->register-types
-         get-property
-         set-property!
-         unset-property!
-         get-resource
-         set-resource!
+         make-proxy-resource
          delete-resource!
          property-valid?
-         resource-valid?)
+         resource-valid?
+         open-session)
 
         (import scheme)
         (import chicken)
@@ -39,6 +36,7 @@
         (use srfi-19)
         (use numbers)
         (use sets)
+        (use irregex)
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
@@ -70,19 +68,74 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  PROPERTY TYPES  ------------------------------------------------
 
-(define prop-types (make-hash-table))
+(define-syntax make-pt-primitive
+  (syntax-rules ()
+    ((_ to from val)
+     (lambda (msg)
+       (case msg
+         ((to-string) to)
+         ((from-string) from)
+         ((validator) val)
+         (else #f))))))
 
-(define-prop-type string base-type: string)
+(define prop-types
+  (let ((pt-table (make-hash-table)))
+    (hash-table-set!
+      pt-table
+      'string
+      (make-pt-primitive identity identity string?))
+    (hash-table-set!
+      pt-table
+      'char
+      (make-pt-primitive
+        (o list->string list) (o car string->list) char?))
+    (hash-table-set!
+      pt-table
+      'number
+      (make-pt-primitive number->string string->number number?))
+    (hash-table-set!
+      pt-table
+      'boolean
+      (make-pt-primitive boolean->string string->boolean boolean?))
+    pt-table))
 
-(define-prop-type number base-type: number)
+(define (make-irregex-validator patt)
+  (let ((re (irregex patt)))
+    (lambda (str)
+      (and (irregex-match re str) #t))))
 
-(define-prop-type character base-type: character)
+(define (make-prop-type type #!key (base-type #f) (defined-in #f)
+                        (to-string #f) (from-string #f) (validator #f))
+  (lambda (msg)
+    (case msg
+      ((type) type)
+      ((base-type) base-type)
+      ((defined-in) defined-in)
+      ((to-string)
+       (or to-string
+           (base-type 'to-string)))
+      ((from-string)
+       (or from-string
+           (base-type 'from-string)))
+      ((validator)
+       (or validator
+           (base-type 'validator))))))
 
-(define-prop-type boolean base-type: string)
+(define (register-prop-type type #!key (base-type #f) (defined-in #f)
+                            (to-string #f) (from-string #f) (validator #f)
+                            (force! #f))
+  (when (and (hash-table-exists! property-types type)
+             (not force!))
+    (error (sprintf "Property ~A already exists." type)))
+  (hash-table-set!
+    property-types
+    type
+    (make-prop-type type base-type: base-type defined-in: defined-in
+                    to-string: to-string from-string: from-string
+                    validator: validator)))
 
-(define-prop-type date base-type: date defined-by: srfi-19
-                  storage-type: string from-string: secstring->date
-                  to-string: date->secstring)
+(define (unregister-prop-type type)
+  (hash-table-delete! property-types type))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
