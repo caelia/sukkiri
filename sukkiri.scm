@@ -15,15 +15,17 @@
 ;;; interface to the first two of these procedures.
 
 (module sukkiri
-        (add-prop
-         update-prop
-         delete-prop
-         query
-         open-session
-         :>
-         :>>
-         :-
-         :<)
+        (register-prop-type
+         register-resource-type
+         xml->register-types
+         get-property
+         set-property!
+         unset-property!
+         get-resource
+         set-resource!
+         delete-resource!
+         property-valid?
+         resource-valid?)
 
         (import scheme)
         (import chicken)
@@ -66,55 +68,50 @@
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  FIELD TYPE DEFINITIONS  ----------------------------------------
+;;; --  PROPERTY TYPES  ------------------------------------------------
 
-(define field-types (make-hash-table))
+(define prop-types (make-hash-table))
 
-(define-field-type string base-type: string)
+(define-prop-type string base-type: string)
 
-(define-field-type number base-type: number)
+(define-prop-type number base-type: number)
 
-(define-field-type character base-type: character)
+(define-prop-type character base-type: character)
 
-(define-field-type boolean base-type: string)
+(define-prop-type boolean base-type: string)
 
-(define-field-type date base-type: date defined-by: srfi-19
-                   storage-type: string from-string: secstring->date
-                   to-string: date->secstring)
-
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-
-
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  STRUCTURED CONTENT TYPES  --------------------------------------
-
-(define content-types (make-hash-table))
+(define-prop-type date base-type: date defined-by: srfi-19
+                  storage-type: string from-string: secstring->date
+                  to-string: date->secstring)
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  DATA TYPES  ----------------------------------------------------
+;;; --  RESOURCE TYPES  ------------------------------------------------
 
-(define-record-type iref (make-iref target) iref?
-                    (target iref-target))
+(define resource-types (make-hash-table))
+ 
+(define-record prop-spec label type default
+               required? element-type min-size max-size)
 
-(define-record-printer (iref x out)
-                       (fprintf out "[IREF: ~S :]" (iref-target x)))
+(define (create-atomic-prop-spec label type #!key
+                                 (default '(#f)) (required? #t))
+  (make-prop-spec label type default required? #f #f #f)) 
 
-(define-record-type xref (make-xref target) xref?
-                    (target xref-target))
+(define (create-struct-prop-spec label type element-type #key
+                                 (default '(#f)) (required? #t)
+                                 (min-size 0) (max-size #f))
+  (make-prop-spec label type default required? element-type min-size max-size))
 
-(define-record-printer (xref x out)
-                       (fprintf out "[XREF: ~S :]" (xref-target x)))
+(define (register-resource-type type-name prop-specs)
+  (hash-table-set! resource-types type-name prop-specs))
 
-(define-record-type fref (make-fref target) fref?
-                    (target fref-target))
+(define-record resource id type data)
 
-(define-record-printer (fref x out)
-                       (fprintf out "[FREF: ~S :]" (fref-target x)))
+(define (create-resource id type #!optional (data '()))
+  (make-resource id type (alist->hash-table data)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -152,7 +149,7 @@
       (else (error "Database contains data; unable to initialize.")))
     (redis-sadd "dbs-in-use" (*control-db-idx*))
     (redis-sadd "dbs-in-use" (*scratch-db-idx*))
-    (redis-set "@CONTROL-DB" "1")
+    (redis-set "%CONTROL-DB" "1")
     (redis-hset "scratch" "db-index" (*scratch-db-idx*))))
 
 (define (set-total-dbs)
@@ -220,9 +217,9 @@
   (set-total-dbs)
   (redis-select (*control-db-idx*)) ; Select control DB
   (debug-msg "open-session: select control db")
-  (let ((rs-exists (redis-exists "@CONTROL-DB")))
+  (let ((rs-exists (redis-exists "%CONTROL-DB")))
     (when (= (car rs-exists) 0)
-      (debug-msg "open-session: '@CONTROL-DB' doesn't exist")
+      (debug-msg "open-session: '%CONTROL-DB' doesn't exist")
       (init-dbs force-init))
     (debug-msg "dbs initialized")
     (if app-id
@@ -245,12 +242,12 @@
 ;;; --  GENERIC STORAGE PROTOCOL  --------------------------------------
 
 (define (generate-node-id)
-  (let ((base-id (redis-incr "@NODE-ID")))
-    (sprintf "@NODE:~X" (car base-id))))
+  (let ((base-id (redis-incr "%NODE-ID")))
+    (sprintf "%NODE:~X" (car base-id))))
 
 (define (generate-anon-id)
-  (let ((base-id (redis-incr "@ANON-ID")))
-    (sprintf "@ANONYMOUS:~X" (car base-id))))
+  (let ((base-id (redis-incr "%ANON-ID")))
+    (sprintf "%ANONYMOUS:~X" (car base-id))))
 
 ;;; ====================================================================
 ;;; --  Storage  -------------------------------------------------------
@@ -329,59 +326,12 @@
     (else (error (sprintf "String '~A' does not represent a boolean." s)))))
 
 
-(define (prepare-value obj)
-  (let* ((prefix+conv
-           (cond
-             ((null? obj) (cons #\- (lambda (_) "")))
-             ((boolean? obj) (cons #\b boolean->string))
-             ((number? obj) (cons #\n number->string))
-             ((date? obj) (cons #\d date->secstring))
-             ((char? obj) (cons #\c ->string))
-             ((string? obj) (cons #\s identity))
-             ((iref? obj) (cons #\i iref-target))
-             ((xref? obj) (cons #\x xref-target))
-             ((fref? obj) (cons #\f fref-target))
-             ((list? obj)
-              (cons #\L store-anonymous-list))
-             ((hash-table? obj)
-              (cons #\H store-anonymous-hash))
-             ((set? obj)
-              (cons #\S store-anonymous-set))
-             (else #f)))
-         (prefix
-           (and prefix+conv
-                (car prefix+conv)))
-         (converter
-           (and prefix+conv
-                (cdr prefix+conv))))
-    (and prefix
-         converter
-         (list->string (cons prefix (string->list (converter obj)))))))
-
-(define (dbstring->any s)
-  (let ((first (string-ref s 0))
-        (rest (substring s 1)))
-    (case first
-      ((#\-) '())
-      ((#\b) (string->boolean rest))
-      ((#\n) (string->number rest))
-      ((#\d) (secstring->date rest))
-      ((#\c) (string-ref rest 0))
-      ((#\i) (make-iref rest))
-      ((#\x) (make-xref rest))
-      ((#\f) (make-fref rest))
-      ((#\s) rest)
-      ((#\L) (retrieve-anonymous-list rest))
-      ((#\H) (retrieve-anonymous-hash rest))
-      ((#\S) (retrieve-anonymous-set rest))
-      (else (error "Unknown data type.")))))
-
-(define (get-property obj-id prop-name #!optional (type-def #f))
+(define (get-property res-id prop-name #!optional (type-def #f))
   (let* ((type
            (if type-def #f (entity-type obj)))
          (type-def
            (or type-def
-               (hash-table-ref content-types id)))
+               (hash-table-ref resource-types id)))
          (field-type
            (type-def prop-name))
          (field-def
@@ -390,7 +340,7 @@
            (field-def 'from-dbstring))
          (required?
            (member? prop-name (type-def 'required))))
-    (let ((rs (car (redis-hget obj-id prop-name))))
+    (let ((rs (car (redis-hget res-id prop-name))))
       (cond
         ((and (null? rs) required?)
          (error (sprintf "Required property '~A' is missing." prop-name)))
@@ -398,26 +348,26 @@
          '())
         (else (convert rs))))))
 
-(define (set-property obj-id prop-name value #!optional (type-def #f))
+(define (set-property res-id prop-name value #!optional (type-def #f))
   (let* ((type
            (if type-def #f (entity-type obj)))
          (type-def
            (or type-def
-               (hash-table-ref content-types id)))
+               (hash-table-ref resource-types id)))
          (field-type (type-def prop-name))
          (field-def (hash-table-ref field-types field-type))
          (valid? (field-def 'validator))
          (convert (field-def 'to-dbstring)))
     (if (valid? value)
-      (redis-hset obj-id prop-name (convert value))
+      (redis-hset res-id prop-name (convert value))
       (error
         (sprintf
           "'~A' is not a valid value for property '~A' on object '~A'"
-          value prop-name obj-id)))))
+          value prop-name res-id)))))
 
-(define (get-object id)
-  (let* ((type (car (redis-hget id "@CONTENT-TYPE")))
-         (type-def (hash-table-ref content-types type))
+(define (get-resource id)
+  (let* ((type (string->symbol (car (redis-hget id "%TYPE"))))
+         (type-def (hash-table-ref resource-types type))
          (fields (type-def 'fields))
          (result (make-hash-table)))
     (for-each
@@ -426,10 +376,17 @@
       fields)
     result))
 
-(define (set-object! id obj)
-  (let* ((type (entity-type obj))
-         (type-def (hash-table-ref content-types type)))
-  #f)
+(define (set-resource! obj)
+  (let* ((id (resource-id obj))
+         (type (resource-type obj))
+         (type-def (hash-table-ref resource-types type))
+         (data (resource-data obj)))
+    (redis-hset id "%TYPE" (symbol->string type))
+    (hash-table-for-each
+      data
+      (lambda (k v)
+        (set-property id k v type-def)))))
+    
 
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
