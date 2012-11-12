@@ -118,6 +118,8 @@
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
+
+
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  UTILITY FUNCTIONS  ---------------------------------------------
 
@@ -373,6 +375,62 @@
       ((#\H) (retrieve-anonymous-hash rest))
       ((#\S) (retrieve-anonymous-set rest))
       (else (error "Unknown data type.")))))
+
+(define (get-property obj-id prop-name #!optional (type-def #f))
+  (let* ((type
+           (if type-def #f (entity-type obj)))
+         (type-def
+           (or type-def
+               (hash-table-ref content-types id)))
+         (field-type
+           (type-def prop-name))
+         (field-def
+           (hash-table-ref field-types field-type))
+         (convert
+           (field-def 'from-dbstring))
+         (required?
+           (member? prop-name (type-def 'required))))
+    (let ((rs (car (redis-hget obj-id prop-name))))
+      (cond
+        ((and (null? rs) required?)
+         (error (sprintf "Required property '~A' is missing." prop-name)))
+        ((null? rs)
+         '())
+        (else (convert rs))))))
+
+(define (set-property obj-id prop-name value #!optional (type-def #f))
+  (let* ((type
+           (if type-def #f (entity-type obj)))
+         (type-def
+           (or type-def
+               (hash-table-ref content-types id)))
+         (field-type (type-def prop-name))
+         (field-def (hash-table-ref field-types field-type))
+         (valid? (field-def 'validator))
+         (convert (field-def 'to-dbstring)))
+    (if (valid? value)
+      (redis-hset obj-id prop-name (convert value))
+      (error
+        (sprintf
+          "'~A' is not a valid value for property '~A' on object '~A'"
+          value prop-name obj-id)))))
+
+(define (get-object id)
+  (let* ((type (car (redis-hget id "@CONTENT-TYPE")))
+         (type-def (hash-table-ref content-types type))
+         (fields (type-def 'fields))
+         (result (make-hash-table)))
+    (for-each
+      (lambda (fld)
+        (hash-table-set! result fld (get-property id fld type-def)))
+      fields)
+    result))
+
+(define (set-object! id obj)
+  (let* ((type (entity-type obj))
+         (type-def (hash-table-ref content-types type)))
+  #f)
+
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
