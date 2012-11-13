@@ -15,14 +15,17 @@
 ;;; interface to the first two of these procedures.
 
 (module sukkiri
-        (register-prop-type
-         register-resource-type
-         xml->register-types
-         make-proxy-resource
-         delete-resource!
-         property-valid?
-         resource-valid?
-         open-session)
+        *
+;         (register-prop-type
+;          register-resource-type
+;          xml->register-types
+;          create-resource
+;          load-proxy-resource
+;          delete-resource!
+; ;         property-valid?
+; ;         resource-valid?
+;          open-session
+;          prop-responder)
 
         (import scheme)
         (import chicken)
@@ -78,26 +81,39 @@
          ((validator) val)
          (else #f))))))
 
+; (define prop-types
+;   (let ((pt-table (make-hash-table)))
+;       pt-table
+;       'string
+;       (make-pt-primitive identity identity string?))
+;     (hash-table-set!
+;       pt-table
+;       'char
+;       (make-pt-primitive
+;         (o list->string list) (o car string->list) char?))
+;     (hash-table-set!
+;       pt-table
+;       'number
+;       (make-pt-primitive number->string string->number number?))
+;     (hash-table-set!
+;       pt-table
+;       'boolean
+;       (make-pt-primitive boolean->string string->boolean boolean?))
+;     pt-table))
+
 (define prop-types
-  (let ((pt-table (make-hash-table)))
-    (hash-table-set!
-      pt-table
-      'string
-      (make-pt-primitive identity identity string?))
-    (hash-table-set!
-      pt-table
-      'char
-      (make-pt-primitive
-        (o list->string list) (o car string->list) char?))
-    (hash-table-set!
-      pt-table
-      'number
-      (make-pt-primitive number->string string->number number?))
-    (hash-table-set!
-      pt-table
-      'boolean
-      (make-pt-primitive boolean->string string->boolean boolean?))
-    pt-table))
+  (alist->hash-table
+    (list
+      (cons 'string
+            (make-pt-primitive identity identity string?))
+      (cons 'char
+            (make-pt-primitive
+              (o list->string list) (o car string->list) char?))
+      (cons 'number
+            (make-pt-primitive number->string string->number number?))
+      (cons 'boolean
+            (make-pt-primitive boolean->string string->boolean boolean?)))))
+
 
 (define (make-irregex-validator patt)
   (let ((re (irregex patt)))
@@ -124,18 +140,18 @@
 (define (register-prop-type type #!key (base-type #f) (defined-in #f)
                             (to-string #f) (from-string #f) (validator #f)
                             (force! #f))
-  (when (and (hash-table-exists! property-types type)
+  (when (and (hash-table-exists? prop-types type)
              (not force!))
     (error (sprintf "Property ~A already exists." type)))
   (hash-table-set!
-    property-types
+    prop-types
     type
-    (make-prop-type type base-type: base-type defined-in: defined-in
-                    to-string: to-string from-string: from-string
-                    validator: validator)))
+    (make-prop-type
+      type base-type: base-type defined-in: defined-in
+      to-string: to-string from-string: from-string validator: validator)))
 
 (define (unregister-prop-type type)
-  (hash-table-delete! property-types type))
+  (hash-table-delete! prop-types type))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -153,7 +169,7 @@
                                  (default '(#f)) (required? #t))
   (make-prop-spec label type default required? #f #f #f)) 
 
-(define (create-struct-prop-spec label type element-type #key
+(define (create-struct-prop-spec label type element-type #!key
                                  (default '(#f)) (required? #t)
                                  (min-size 0) (max-size #f))
   (make-prop-spec label type default required? element-type min-size max-size))
@@ -163,8 +179,11 @@
 
 (define-record resource id type data)
 
-(define (create-resource id type #!optional (data '()))
-  (make-resource id type (alist->hash-table data)))
+;(define (create-resource id type #!optional (data '()))
+;  (make-resource id type (alist->hash-table data)))
+
+(define (xml->register-types)
+  #f)
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -305,60 +324,60 @@
 ;;; ====================================================================
 ;;; --  Storage  -------------------------------------------------------
 
-(define (store-hash-table id ht)
-  (hash-table-walk
-    ht
-    (lambda (k v)
-      (redis-hset id k (prepare-value v)))))
-
-(define (store-list id lst)
-  (for-each
-    (lambda (elt)
-      (redis-lpush id (prepare-value elt)))
-    lst))
-
-(define (store-set id set)
-  (set-for-each
-    (lambda (elt)
-      (redis-sadd id (prepare-value elt)))
-    set))
-
-(define (store-anonymous-object f obj)
-  (let* ((id (generate-anon-id))
-         (stored (f id obj)))
-    (and stored id)))
-
-(define (store-anonymous-hash obj)
-  (store-anonymous-object obj store-hash-table))
-
-(define (store-anonymous-list obj)
-  (store-anonymous-object store-list obj))
-
-(define (store-anonymous-set obj)
-  (store-anonymous-object store-set obj))
-
-;;; ====================================================================
-;;; --  Retrieval  -----------------------------------------------------
-
-(define (retrieve-anonymous-list id)
-  (let* ((len (car (redis-llen id)))
-         (elts (redis-lrange id "0" (number->string (- len 1)))))
-    (map dbstring->any elts)))
-
-(define (retrieve-anonymous-set id)
-  (let ((mems (redis-smembers id)))
-    (list->set
-      (map dbstring->any mems))))
-
-(define (retrieve-anonymous-hash id)
-  (let ((h (make-hash-table))
-        (fields (redis-hkeys id)))
-    (for-each
-      (lambda (fld)
-        (let ((raw-val (car (redis-hget id fld))))
-          (hash-table-set! h fld (dbstring->any raw-val))))
-      fields)
-    h))
+; (define (store-hash-table id ht)
+;   (hash-table-walk
+;     ht
+;     (lambda (k v)
+;       (redis-hset id k (prepare-value v)))))
+; 
+; (define (store-list id lst)
+;   (for-each
+;     (lambda (elt)
+;       (redis-lpush id (prepare-value elt)))
+;     lst))
+; 
+; (define (store-set id set)
+;   (set-for-each
+;     (lambda (elt)
+;       (redis-sadd id (prepare-value elt)))
+;     set))
+; 
+; (define (store-anonymous-object f obj)
+;   (let* ((id (generate-anon-id))
+;          (stored (f id obj)))
+;     (and stored id)))
+; 
+; (define (store-anonymous-hash obj)
+;   (store-anonymous-object obj store-hash-table))
+; 
+; (define (store-anonymous-list obj)
+;   (store-anonymous-object store-list obj))
+; 
+; (define (store-anonymous-set obj)
+;   (store-anonymous-object store-set obj))
+; 
+; ;;; ====================================================================
+; ;;; --  Retrieval  -----------------------------------------------------
+; 
+; (define (retrieve-anonymous-list id)
+;   (let* ((len (car (redis-llen id)))
+;          (elts (redis-lrange id "0" (number->string (- len 1)))))
+;     (map dbstring->any elts)))
+; 
+; (define (retrieve-anonymous-set id)
+;   (let ((mems (redis-smembers id)))
+;     (list->set
+;       (map dbstring->any mems))))
+; 
+; (define (retrieve-anonymous-hash id)
+;   (let ((h (make-hash-table))
+;         (fields (redis-hkeys id)))
+;     (for-each
+;       (lambda (fld)
+;         (let ((raw-val (car (redis-hget id fld))))
+;           (hash-table-set! h fld (dbstring->any raw-val))))
+;       fields)
+;     h))
   
 ;;; ====================================================================
 ;;; --  Conversion  ----------------------------------------------------
@@ -379,20 +398,15 @@
     (else (error (sprintf "String '~A' does not represent a boolean." s)))))
 
 
-(define (get-property res-id prop-name #!optional (type-def #f))
-  (let* ((type
-           (if type-def #f (entity-type obj)))
-         (type-def
-           (or type-def
-               (hash-table-ref resource-types id)))
-         (field-type
-           (type-def prop-name))
-         (field-def
-           (hash-table-ref field-types field-type))
-         (convert
-           (field-def 'from-dbstring))
-         (required?
-           (member? prop-name (type-def 'required))))
+(define (get-property res-id prop-name)
+  (let* ((res-type (car (redis-hget res-id "%TYPE")))
+         (type-def (hash-table-ref resource-types res-type))
+         ;(prop-spec (type-def prop-name))
+         (prop-spec (alist-ref prop-name type-def))
+         (pt-name (prop-spec-type prop-spec))
+         (pt-def (hash-table-ref prop-types pt-name))
+         (convert (pt-def 'from-string))
+         (required? (prop-spec-required? prop-spec)))
     (let ((rs (car (redis-hget res-id prop-name))))
       (cond
         ((and (null? rs) required?)
@@ -402,15 +416,13 @@
         (else (convert rs))))))
 
 (define (set-property res-id prop-name value #!optional (type-def #f))
-  (let* ((type
-           (if type-def #f (entity-type obj)))
-         (type-def
-           (or type-def
-               (hash-table-ref resource-types id)))
-         (field-type (type-def prop-name))
-         (field-def (hash-table-ref field-types field-type))
-         (valid? (field-def 'validator))
-         (convert (field-def 'to-dbstring)))
+  (let* ((res-type (car (redis-hget res-id "%TYPE")))
+         (type-def (hash-table-ref resource-types res-type))
+         (prop-spec (alist-ref prop-name type-def))
+         (pt-name (prop-spec-type prop-spec))
+         (pt-def (hash-table-ref prop-types pt-name))
+         (valid? (pt-def 'validator))
+         (convert (pt-def 'to-string)))
     (if (valid? value)
       (redis-hset res-id prop-name (convert value))
       (error
@@ -444,6 +456,77 @@
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --  PROXY OBJECTS  -------------------------------------------------
+
+; (define-syntax prop-responder
+;   (ir-macro-transformer
+;     (lambda (expr inj comp)
+;       (let* ((res-id (car expr))
+;              (prop-name (cadr expr))
+;              (prop-type (caddr expr))
+;              (type-def (hash-table-ref prop-types prop-type))
+;              (ts (type-def 'to-string))
+;              (fs (type-def 'from-string))
+;              (v (type-def 'validator)))
+;         `(lambda (arg . args)
+;            (if (null? args)
+;              (,fs (car (redis-hget ,res-id ,prop-name)))
+;              (let* ((new-val (car args))
+;                     (valid? (v new-val)))
+;                (if valid?
+;                  (redis-hset ,res-id ,prop-name (,ts new-val))
+;                  (error "Invalid input!")))))))))
+
+(define (make-prop-responder res-id prop-name prop-type)
+  (let* ((type-def (hash-table-ref prop-types prop-type))
+         (ts (type-def 'to-string))
+         (fs (type-def 'from-string))
+         (v (type-def 'validator)))
+    (lambda args
+      (if (null? args)
+        (fs (car (redis-hget res-id prop-name)))
+        (let* ((new-val (car args))
+               (valid? (v new-val)))
+          (if valid? 
+            (redis-hset res-id prop-name (ts new-val))
+            (error "Invalid input!")))))))
+
+(define (create-resource-proxy id type prop-specs)
+  (let ((responders
+          (map
+            (lambda (p)
+              (let ((pn (car p))
+                    (pt (cadr p)))
+                (cons pn (make-prop-responder id pn pt))))
+            prop-specs)))
+    (lambda (arg . args)
+      (case arg
+        ((id) id)
+        ((type) type)
+        ((resp) responders) ; just for debugging
+        (else (apply (alist-ref arg responders string=?) args))))))
+
+(define (create-resource id type . prop-specs)
+  (redis-hset id "%TYPE" (symbol->string type))
+  (let ((proxy (create-resource-proxy id type prop-specs)))
+    (for-each
+      (lambda (ps)
+        (unless (null? (cddr ps))
+          (proxy (car ps) (caddr ps))))
+      prop-specs)
+    proxy))
+
+(define (load-proxy-resource id)
+  #f
+  )
+
+(define (delete-resource! id)
+  #f)
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 )
 
