@@ -73,9 +73,10 @@
 
 (define-syntax make-pt-primitive
   (syntax-rules ()
-    ((_ to from val)
+    ((_ type-sym to from val)
      (lambda (msg)
        (case msg
+         ((type) type-sym)
          ((to-string) to)
          ((from-string) from)
          ((validator) val)
@@ -101,25 +102,6 @@
 ;       (make-pt-primitive boolean->string string->boolean boolean?))
 ;     pt-table))
 
-(define prop-types
-  (alist->hash-table
-    (list
-      (cons 'string
-            (make-pt-primitive identity identity string?))
-      (cons 'char
-            (make-pt-primitive
-              (o list->string list) (o car string->list) char?))
-      (cons 'number
-            (make-pt-primitive number->string string->number number?))
-      (cons 'boolean
-            (make-pt-primitive boolean->string string->boolean boolean?)))))
-
-
-(define (make-irregex-validator patt)
-  (let ((re (irregex patt)))
-    (lambda (str)
-      (and (irregex-match re str) #t))))
-
 (define (make-prop-type type #!key (base-type #f) (defined-in #f)
                         (to-string #f) (from-string #f) (validator #f))
   (lambda (msg)
@@ -136,6 +118,44 @@
       ((validator)
        (or validator
            (base-type 'validator))))))
+
+(define prop-types
+  (let ((string-type
+          (make-pt-primitive 'string identity identity string?)))
+    (alist->hash-table
+      (list
+        (cons 'string string-type)
+        (cons 'char
+              (make-pt-primitive
+                'char (o list->string list) (o car string->list) char?))
+        (cons 'symbol
+              (make-pt-primitive
+                'symbol symbol->string string->symbol symbol?))
+        (cons 'number
+              (make-pt-primitive
+                'number number->string string->number number?))
+        (cons 'boolean
+              (make-pt-primitive 
+                'boolean boolean->string string->boolean boolean?))
+        (cons 'date
+              (make-prop-type 'date
+                              defined-in: 'srfi-19 to-string: date->secstring
+                              from-string: secstring->date validator: date?))
+        (cons 'iref
+              (make-prop-type 'iref base-type: string-type))
+        (cons 'xref
+              (make-prop-type 'xref base-type: string-type))
+        (cons 'fref
+              (make-prop-type 'fref base-type: string-type))))))
+
+(define (make-irregex-validator patt)
+  (let ((re (irregex patt)))
+    (lambda (str)
+      (and (irregex-match re str) #t))))
+
+(define (make-enum-validator choices)
+  (lambda (x)
+    (member x choices)))
 
 (define (register-prop-type type #!key (base-type #f) (defined-in #f)
                             (to-string #f) (from-string #f) (validator #f)
@@ -313,9 +333,9 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  GENERIC STORAGE PROTOCOL  --------------------------------------
 
-(define (generate-node-id)
-  (let ((base-id (redis-incr "%NODE-ID")))
-    (sprintf "%NODE:~X" (car base-id))))
+(define (generate-resource-id)
+  (let ((base-id (redis-incr "%RESOURCE-ID")))
+    (sprintf "%RESOURCE:~X" (car base-id))))
 
 (define (generate-anon-id)
   (let ((base-id (redis-incr "%ANON-ID")))
@@ -385,24 +405,23 @@
 (define (boolean->string b)
   (if b "T" "F"))
 
-(define date->secstring
-  (o number->string inexact->exact time->seconds date->time))
-
-(define secstring->date
-  (o seconds->date string->number))
-
 (define (string->boolean s)
   (cond
     ((string=? s "T") #t)
     ((string=? s "F") #f)
     (else (error (sprintf "String '~A' does not represent a boolean." s)))))
 
+(define date->secstring
+  (o number->string inexact->exact time->seconds date->time))
+
+(define secstring->date
+  (o seconds->date inexact->exact string->number))
 
 (define (get-property res-id prop-name)
   (let* ((res-type (car (redis-hget res-id "%TYPE")))
          (type-def (hash-table-ref resource-types res-type))
          ;(prop-spec (type-def prop-name))
-         (prop-spec (alist-ref prop-name type-def))
+         (prop-spec (alist-ref prop-name type-def string=?))
          (pt-name (prop-spec-type prop-spec))
          (pt-def (hash-table-ref prop-types pt-name))
          (convert (pt-def 'from-string))
@@ -418,7 +437,7 @@
 (define (set-property res-id prop-name value #!optional (type-def #f))
   (let* ((res-type (car (redis-hget res-id "%TYPE")))
          (type-def (hash-table-ref resource-types res-type))
-         (prop-spec (alist-ref prop-name type-def))
+         (prop-spec (alist-ref prop-name type-def string=?))
          (pt-name (prop-spec-type prop-spec))
          (pt-def (hash-table-ref prop-types pt-name))
          (valid? (pt-def 'validator))
@@ -452,6 +471,27 @@
       (lambda (k v)
         (set-property id k v type-def)))))
     
+
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --  DATABASE INDEXES  ----------------------------------------------
+
+(define (add-to-index propname . refs)
+  (let ((idx-name (string-append "%INDEX:" propname)))
+    (for-each
+      (lambda (r) (redis-sadd idx-name r))
+      refs)))
+
+;; FIXME: Think we should URLencode the string to handle spaces
+(define (add-to-tag-index tag . refs)
+  (let ((idx-name (string-append "%TAG:" tag)))
+    (for-each
+      (lambda (r) (redis-sadd idx-name r))
+      refs)))
 
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
