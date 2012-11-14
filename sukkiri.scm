@@ -162,7 +162,7 @@
                             (force! #f))
   (when (and (hash-table-exists? prop-types type)
              (not force!))
-    (error (sprintf "Property ~A already exists." type)))
+    (eprintf "Property ~A already exists." type))
   (hash-table-set!
     prop-types
     type
@@ -212,6 +212,9 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  UTILITY FUNCTIONS  ---------------------------------------------
 
+(define (eprintf fmt . args)
+  (error (apply sprintf (cons fmt args))))
+
 (define (debug-msg . msgs)
   (when (*sukkiri-debug*)
     (with-output-to-port
@@ -223,6 +226,20 @@
 
 (define (ymdhms->date yr mo dt hr mi #!optional (se 0))
   (make-date 0 se mi hr dt mo yr))
+
+(define (get-redis-list key)
+  (let* ((len (string->number (car (redis-llen key))))
+         (last (number->string (- len 1))))
+    (redis-lrange key "0" last)))
+
+(define (get-redis-set key)
+  (list->set (redis-smembers key)))
+
+(define (db-result->bool rs)
+  (case (car rs)
+    ((0) #f)
+    ((1) #t)
+    (else (eprintf "Result '~A' cannot be converted to a boolean value." rs))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -409,7 +426,7 @@
   (cond
     ((string=? s "T") #t)
     ((string=? s "F") #f)
-    (else (error (sprintf "String '~A' does not represent a boolean." s)))))
+    (else (eprintf "String '~A' does not represent a boolean." s))))
 
 (define date->secstring
   (o number->string inexact->exact time->seconds date->time))
@@ -429,7 +446,7 @@
     (let ((rs (car (redis-hget res-id prop-name))))
       (cond
         ((and (null? rs) required?)
-         (error (sprintf "Required property '~A' is missing." prop-name)))
+         (eprintf "Required property '~A' is missing." prop-name))
         ((null? rs)
          '())
         (else (convert rs))))))
@@ -480,19 +497,35 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  DATABASE INDEXES  ----------------------------------------------
 
-(define (add-to-index propname . refs)
-  (let ((idx-name (string-append "%INDEX:" propname)))
+(define (index-add name #!optional (refs '()) #!key (prefix "%HAS-PROP:"))
+  (let ((idx-name (string-append prefix name)))
     (for-each
       (lambda (r) (redis-sadd idx-name r))
       refs)))
 
 ;; FIXME: Think we should URLencode the string to handle spaces
-(define (add-to-tag-index tag . refs)
-  (let ((idx-name (string-append "%TAG:" tag)))
-    (for-each
-      (lambda (r) (redis-sadd idx-name r))
-      refs)))
+(define (tag-index-add tag . refs)
+  (index-add tag refs prefix: "%TAG:"))
 
+(define (index-del name value #!optional (prefix "%HAS-PROP:"))
+  (let ((idx-name (string-append prefix name)))
+    (redis-sdel name value)))
+
+(define (tag-index-del name value)
+  (index-del name value "%TAG:"))
+
+(define (index-exists? name value #!optional (prefix "%HAS-PROP"))
+  (db-result->bool (redis-sismember name value)))
+
+(define (tag-index-exists? name value)
+  (index-exists? name value "%TAG:"))
+
+(define (get-index name #!optional (prefix "%HAS-PROP:"))
+  (let ((idx-name (string-append prefix name)))
+    (redis-sismembers idx-name)))
+
+(define (get-tag-index name)
+  (get-index name "%TAG:"))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
