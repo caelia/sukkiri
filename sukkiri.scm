@@ -40,6 +40,7 @@
         (use numbers)
         (use sets)
         (use irregex)
+        (use s11n) ; FIXME -- using because date->secstring is not working
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
@@ -195,10 +196,18 @@
     (else (eprintf "String '~A' does not represent a boolean." s))))
 
 (define date->secstring
-  (o number->string inexact->exact time->seconds date->time))
+  (lambda (d)
+  (with-output-to-string
+    (lambda ()
+      (serialize d)))))
+  ;(o number->string inexact->exact time->seconds date->time))
 
 (define secstring->date
-  (o seconds->date inexact->exact string->number))
+  (lambda (s)
+    (with-input-from-string s
+      (lambda ()
+        (deserialize s)))))
+  ;(o seconds->date inexact->exact string->number))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -256,51 +265,54 @@
            (base-type 'validator)))
       (else (eprintf "Unrecognized message: ~A" msg)))))
 
-(define (make-prop-list element-type)
-  (lambda (msg)
-    (case msg
-      ((type) 'list)
-      ((element-type) element-type)
-      ((to-string)
-       (lambda (lst)
-         (store-anonymous-list
-           (map (element-type 'to-string) lst))))
-      ((from-string)
-       (lambda (s)
-         (map
-           (element-type 'from-string)
-           (retrieve-anonymous-list s))))
-      ((validator)
-       (lambda (lst)
-         (let loop ((lst* lst))
-           (cond
-             ((null? lst*) #t)
-             ((not ((element-type 'validator) (car lst*))) #f)
-             (else (loop (cdr lst*)))))))
-      (else (eprintf "Unrecognized message: ~A" msg)))))
+(define (make-prop-list element-type-sym)
+  (let ((element-type (hash-table-ref prop-types element-type-sym)))
+    (lambda (msg)
+      (case msg
+        ((type) 'list)
+        ((element-type) element-type-sym)
+        ((to-string)
+         (lambda (lst)
+           (store-anonymous-list
+             (map (element-type 'to-string) lst))))
+        ((from-string)
+         (lambda (s)
+           (map
+             (element-type 'from-string)
+             (retrieve-anonymous-list s))))
+        ((validator)
+         (lambda (lst)
+           (let loop ((lst* lst))
+             (cond
+               ((null? lst*) #t)
+               ((not ((element-type 'validator) (car lst*))) #f)
+               (else (loop (cdr lst*)))))))
+        (else (eprintf "Unrecognized message: ~A" msg))))))
 
-(define (make-prop-set element-type)
+(define (make-prop-set element-type-sym #!optional (tag-set? #f))
   (lambda (msg)
-    (case msg
-      ((type) 'set)
-      ((element-type) element-type)
-      ((to-string)
-       (lambda (a)
-         (store-anonymous-set
-           (set-map (element-type 'to-string) a))))
-      ((from-string)
-       (lambda (s)
-         (set-map
-           (element-type 'from-string)
-           (retrieve-anonymous-set s))))
-      ((validator)
-       (lambda (a)
-         (let ((result #t)
-               (val (element-type 'validator)))
-           (set-for-each
-             (lambda (m) (set! result (and result (val m))))
-             a))))
-      (else (eprintf "Unrecognized message: ~A" msg)))))
+    (let ((element-type (hash-table-ref prop-types element-type-sym)))
+      (case msg
+        ((type) 'set)
+        ((tag-set?) tag-set?)
+        ((element-type) element-type-sym)
+        ((to-string)
+         (lambda (a)
+           (store-anonymous-set
+             (set-map (element-type 'to-string) a))))
+        ((from-string)
+         (lambda (s)
+           (set-map
+             (element-type 'from-string)
+             (retrieve-anonymous-set s))))
+        ((validator)
+         (lambda (a)
+           (let ((result #t)
+                 (val (element-type 'validator)))
+             (set-for-each
+               (lambda (m) (set! result (and result (val m))))
+               a))))
+        (else (eprintf "Unrecognized message: ~A" msg))))))
 
 (define prop-types
   (let ((string-type
@@ -324,6 +336,8 @@
               (make-prop-type 'date
                               defined-in: 'srfi-19 to-string: date->secstring
                               from-string: secstring->date validator: date?))
+        (cons 'simple-tag-set
+              (make-prop-set 'string #t))
         (cons 'iref
               (make-prop-type 'iref base-type: string-type))
         (cons 'xref
@@ -353,6 +367,25 @@
       type base-type: base-type defined-in: defined-in
       to-string: to-string from-string: from-string validator: validator)))
 
+(define (register-list-type type-sym element-type #!optional (force! #f))
+  (when (and (hash-table-exists? prop-types type-sym)
+             (not force!))
+    (eprintf "Property type ~A already exists." type-sym))
+  (hash-table-set!
+    prop-types
+    type-sym
+    (make-prop-list element-type)))
+
+(define (register-set-type type-sym element-type
+                           #!key (force! #f) (tag-set? #f))
+  (when (and (hash-table-exists? prop-types type-sym)
+             (not force!))
+    (eprintf "Property type ~A already exists." type-sym))
+  (hash-table-set!
+    prop-types
+    type-sym
+    (make-prop-set element-type tag-set?)))
+
 (define (unregister-prop-type type)
   (hash-table-delete! prop-types type))
 
@@ -365,33 +398,41 @@
 
 (define resource-types (make-hash-table))
  
-(define-record prop-spec label type has-default? default-value
-               required? element-type min-size max-size)
+; (define-record prop-spec label type has-default? default-value
+               ;required? element-type min-size max-size)
+
+(define (make-prop-spec label type #!key (default '(#f)) (required? #t)
+                        (element-type #f) (min-size 0) (max-size #f))
+  (lambda (msg)
+    (case msg
+      ((label) label)
+      ((type) type)
+      ((has-default?) (car default))
+      ((default-value) (cadr default))
+      ((required?) required?)
+      ((element-type) element-type)
+      ((min-size) 0)
+      ((max-size) #f)
+      (else (eprintf "[prop-spec] Unrecognized message: ~A" msg)))))
 
 ;; default values need to be lists: the first element indicates whether
 ;;   or not there is a default, the second is the default value
 (define (create-atomic-prop-spec label type #!key
                                  (default '(#f)) (required? #t))
-  (let* ((has-def?
-           (car default))
-         (def-val
-           (and has-def? (cadr default))))
-    (make-prop-spec label type has-def? def-val required? #f #f #f)))
+  (make-prop-spec label type default: default required?: required?))
 
-(define (create-struct-prop-spec label type element-type #!key
-                                 (default '(#f)) (required? #t)
-                                 (min-size 0) (max-size #f))
-  (let* ((has-def?
-           (car default))
-         (def-val
-           (and has-def? (cadr default))))
-    (make-prop-spec label type has-def? def-val required?
-                    element-type min-size max-size)))
+(define (create-struct-prop-spec label type #!key (default '(#f))
+                                 (required? #t) (min-size 0) (max-size #f))
+  (let* ((type-spec (hash-table-ref prop-types type))
+         (elt-type (type-spec 'element-type)))
+    (make-prop-spec label type default: default required?: required?
+                    element-type: elt-type min-size: min-size
+                    max-size: max-size)))
 
 (define (register-resource-type type-name prop-specs)
   (hash-table-set! resource-types type-name prop-specs))
 
-(define-record resource id type data)
+;(define-record resource id type data)
 
 ;(define (create-resource id type #!optional (data '()))
 ;  (make-resource id type (alist->hash-table data)))
@@ -572,13 +613,16 @@
 ;;; --  DATABASE INDEXES  ----------------------------------------------
 
 (define (index-add! name #!optional (refs '()) #!key (prefix "%HAS-PROP:"))
+  (print name)
+  (display "REFS: ")
+  (pp refs)
   (let ((idx-name (string-append prefix name)))
     (for-each
       (lambda (r) (redis-sadd idx-name r))
       refs)))
 
 ;; FIXME: Think we should URLencode the string to handle spaces
-(define (tag-index-add! tag . refs)
+(define (tag-index-add! tag #!optional (refs '()))
   (index-add! tag refs prefix: "%TAG:"))
 
 (define (index-delete! name value #!optional (prefix "%HAS-PROP:"))
@@ -627,12 +671,14 @@
 ;                  (redis-hset ,res-id ,prop-name (,ts new-val))
 ;                  (error "Invalid input!")))))))))
 
-(define (make-prop-responder res-id prop-name prop-type
-                             #!optional (tag-set? #f))
+(define (make-prop-responder res-id prop-sym prop-type)
   (let* ((type-def (hash-table-ref prop-types prop-type))
          (ts (type-def 'to-string))
          (fs (type-def 'from-string))
-         (v (type-def 'validator)))
+         (v (type-def 'validator))
+         (prop-name (symbol->string prop-sym))
+         (tag-set? (and (eqv? (type-def 'type) 'set)
+                        (type-def 'tag-set?))))
     (lambda args
       (if (null? args)
         (fs (car (redis-hget res-id prop-name)))
@@ -642,7 +688,10 @@
             (begin
               (redis-hset res-id prop-name (ts new-val))
               (if tag-set?
-                (tag-index-add! prop-name (list res-id))
+                (set-for-each
+                  (lambda (m)
+                    (tag-index-add! m (list res-id)))
+                  new-val)
                 (index-add! prop-name (list res-id))))
             (error "Invalid input!")))))))
 
@@ -654,7 +703,7 @@
            (lambda (p)
              (let* ((pn (car p))
                     (ps (cdr p))
-                    (pt (prop-spec-type ps)))
+                    (pt (ps 'type)))
                (set! responders
                  (cons
                    (cons pn (make-prop-responder id pn pt))
@@ -666,23 +715,23 @@
         ((type) type)
         ((resp) responders) ; just for debugging
         ((add-resp) (for-each add-responder! args))
-        (else (apply (alist-ref arg responders string=?) args))))))
+        (else (apply (alist-ref arg responders) args))))))
 
 (define (create-resource id type #!optional (prop-data '()))
   (redis-hset id "%TYPE" (symbol->string type))
-  (let* ((prop-specs (hash-table-ref resource-types type))
-         (proxy (create-resource-proxy id type)))
+  (let ((prop-specs (hash-table-ref resource-types type))
+        (proxy (create-resource-proxy id type)))
     (for-each
       (lambda (ps)
         (let* ((name (car ps))
                (spec (cdr ps))
-               (val (alist-ref name prop-data string=?)))
+               (val (alist-ref name prop-data)))
           (if val
             (proxy name val)
             (cond
-              ((prop-spec-has-default? spec)
-               (proxy name (prop-spec-default-value spec)))
-              ((prop-spec-required? spec)
+              ((spec 'has-default?)
+               (proxy name (spec 'default-value)))
+              ((spec 'required?)
                (eprintf "You must provide a value for '~A'." name))
               (else #f)))))
       prop-specs)
