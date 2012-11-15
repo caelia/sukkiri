@@ -275,7 +275,7 @@
          (let loop ((lst* lst))
            (cond
              ((null? lst*) #t)
-             ((not (element-type 'validator) (car lst*)) #f)
+             ((not ((element-type 'validator) (car lst*))) #f)
              (else (loop (cdr lst*)))))))
       (else (eprintf "Unrecognized message: ~A" msg)))))
 
@@ -616,7 +616,8 @@
 ;                  (redis-hset ,res-id ,prop-name (,ts new-val))
 ;                  (error "Invalid input!")))))))))
 
-(define (make-prop-responder res-id prop-name prop-type)
+(define (make-prop-responder res-id prop-name prop-type
+                             #!optional (tag-set? #f))
   (let* ((type-def (hash-table-ref prop-types prop-type))
          (ts (type-def 'to-string))
          (fs (type-def 'from-string))
@@ -629,18 +630,21 @@
           (if valid? 
             (begin
               (redis-hset res-id prop-name (ts new-val))
-              (index-add! prop-name (list res-id)))
+              (if tag-set?
+                (tag-index-add! prop-name (list res-id))
+                (index-add! prop-name (list res-id))))
             (error "Invalid input!")))))))
 
 (define (create-resource-proxy id type #!optional (prop-specs '()))
-  (let ((responders '())
-        (add-responder!
-          (lambda (p)
-            (let ((pn (car p))
-                  (pt (cadr p)))
-              (set! responders
-                (cons
-                  (cons pn (make-prop-responder id pn pt))))))))
+  (let* ((responders '())
+         (add-responder!
+           (lambda (p)
+             (let ((pn (car p))
+                   (pt (cadr p)))
+               (set! responders
+                 (cons
+                   (cons pn (make-prop-responder id pn pt))
+                   responders))))))
     (for-each add-responder! prop-specs)
     (lambda (arg . args)
       (case arg
