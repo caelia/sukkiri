@@ -345,7 +345,7 @@
                             (force! #f))
   (when (and (hash-table-exists? prop-types type)
              (not force!))
-    (eprintf "Property ~A already exists." type))
+    (eprintf "Property type ~A already exists." type))
   (hash-table-set!
     prop-types
     type
@@ -365,17 +365,28 @@
 
 (define resource-types (make-hash-table))
  
-(define-record prop-spec label type default
+(define-record prop-spec label type has-default? default-value
                required? element-type min-size max-size)
 
+;; default values need to be lists: the first element indicates whether
+;;   or not there is a default, the second is the default value
 (define (create-atomic-prop-spec label type #!key
                                  (default '(#f)) (required? #t))
-  (make-prop-spec label type default required? #f #f #f)) 
+  (let* ((has-def?
+           (car default))
+         (def-val
+           (and has-def? (cadr default))))
+    (make-prop-spec label type has-def? def-val required? #f #f #f)))
 
 (define (create-struct-prop-spec label type element-type #!key
                                  (default '(#f)) (required? #t)
                                  (min-size 0) (max-size #f))
-  (make-prop-spec label type default required? element-type min-size max-size))
+  (let* ((has-def?
+           (car default))
+         (def-val
+           (and has-def? (cadr default))))
+    (make-prop-spec label type has-def? def-val required?
+                    element-type min-size max-size)))
 
 (define (register-resource-type type-name prop-specs)
   (hash-table-set! resource-types type-name prop-specs))
@@ -635,12 +646,15 @@
                 (index-add! prop-name (list res-id))))
             (error "Invalid input!")))))))
 
-(define (create-resource-proxy id type #!optional (prop-specs '()))
+(define (create-resource-proxy id type)
   (let* ((responders '())
+         (prop-specs
+           (hash-table-ref resource-types type))
          (add-responder!
            (lambda (p)
-             (let ((pn (car p))
-                   (pt (cadr p)))
+             (let* ((pn (car p))
+                    (ps (cdr p))
+                    (pt (prop-spec-type ps)))
                (set! responders
                  (cons
                    (cons pn (make-prop-responder id pn pt))
@@ -654,14 +668,23 @@
         ((add-resp) (for-each add-responder! args))
         (else (apply (alist-ref arg responders string=?) args))))))
 
-(define (create-resource id type)
+(define (create-resource id type #!optional (prop-data '()))
   (redis-hset id "%TYPE" (symbol->string type))
   (let* ((prop-specs (hash-table-ref resource-types type))
-         (proxy (create-resource-proxy id type prop-specs)))
+         (proxy (create-resource-proxy id type)))
     (for-each
       (lambda (ps)
-        (unless (null? (cddr ps))
-          (proxy (car ps) (caddr ps))))
+        (let* ((name (car ps))
+               (spec (cdr ps))
+               (val (alist-ref name prop-data string=?)))
+          (if val
+            (proxy name val)
+            (cond
+              ((prop-spec-has-default? spec)
+               (proxy name (prop-spec-default-value spec)))
+              ((prop-spec-required? spec)
+               (eprintf "You must provide a value for '~A'." name))
+              (else #f)))))
       prop-specs)
     proxy))
 
@@ -669,9 +692,8 @@
   (let* ((res-id (resource-id id))
          (exists? (db-result->bool (redis-exists res-id))))
     (unless exists? (eprintf "Resource ~A does not exist." id))
-    (let* ((type (resource-type res-id))
-           (prop-specs (hash-table-ref resource-types type)))
-      (create-resource-proxy id type prop-specs))))
+    (let* ((type (resource-type res-id)))
+      (create-resource-proxy id type))))
 
 (define (delete-resource! id)
   ;; First delete index references
