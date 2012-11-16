@@ -720,7 +720,7 @@
 (define (create-resource id type #!optional (prop-data '()))
   (redis-hset id "%TYPE" (symbol->string type))
   (let ((prop-specs (hash-table-ref resource-types type))
-        (proxy (create-resource-proxy id type)))
+        (proxy (create-resource-proxy (resource-id id) type)))
     (for-each
       (lambda (ps)
         (let* ((name (car ps))
