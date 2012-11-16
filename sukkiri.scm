@@ -123,8 +123,11 @@
 (define (resource-id id)
   (sprintf "%RESOURCE:~A" id))
 
+;(define (resource-type id)
+  ;(string->symbol (car (redis-hget (resource-id id) "%TYPE"))))
+
 (define (resource-type id)
-  (string->symbol (car (redis-hget (resource-id id) "%TYPE"))))
+  (string->symbol (car (redis-hget id "%TYPE"))))
 
 (define (generate-anon-id)
   (let ((base-id (redis-incr "%ANON-ID")))
@@ -720,7 +723,7 @@
 (define (create-resource id type #!optional (prop-data '()))
   (redis-hset id "%TYPE" (symbol->string type))
   (let ((prop-specs (hash-table-ref resource-types type))
-        (proxy (create-resource-proxy (resource-id id) type)))
+        (proxy (create-resource-proxy id type)))
     (for-each
       (lambda (ps)
         (let* ((name (car ps))
@@ -738,15 +741,14 @@
     proxy))
 
 (define (load-resource-proxy id)
-  (let* ((res-id (resource-id id))
-         (exists? (db-result->bool (redis-exists res-id))))
+  (let ((exists? (db-result->bool (redis-exists id))))
     (unless exists? (eprintf "Resource ~A does not exist." id))
-    (let* ((type (resource-type res-id)))
+    (let* ((type (resource-type id)))
       (create-resource-proxy id type))))
 
 (define (delete-resource! id)
   ;; First delete index references
-  (let ((props (redis-hkeys id)))
+  (let* ((props (redis-hkeys id)))
     (for-each
       (lambda (p) (index-delete! p id))
       props)
