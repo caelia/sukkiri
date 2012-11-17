@@ -1,4 +1,4 @@
-;;; sukkiri.scm -- A metadata store based on Redis
+;;; sukkiri-lib.scm -- A metadata store based on Redis
 ;;;   Copyright © 2012 by Matt Gushee <matt@gushee.net>
 ;;;   This program is open-source software, released under the
 ;;;   BSD License. See the accompanying LICENSE file for details.
@@ -14,7 +14,7 @@
 ;;; includes the 'sukkiri-admin' program, which provides a command-line
 ;;; interface to the first two of these procedures.
 
-(module sukkiri
+(module sukkiri-lib
         *
 ;         (register-prop-type
 ;          register-resource-type
@@ -209,7 +209,7 @@
   (lambda (s)
     (with-input-from-string s
       (lambda ()
-        (deserialize s)))))
+        (deserialize)))))
   ;(o seconds->date inexact->exact string->number))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
