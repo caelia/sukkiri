@@ -46,7 +46,7 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  GLOBAL PARAMETERS  ---------------------------------------------
 
-(define *sukkiri-debug* (make-parameter #f))
+(define *sukkiri-tags-debug* (make-parameter #f))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -59,7 +59,7 @@
   (error (apply sprintf (cons fmt args))))
 
 (define (debug-msg . msgs)
-  (when (*sukkiri-debug*)
+  (when (*sukkiri-tags-debug*)
     (with-output-to-port
       (current-error-port)
       (lambda () (apply print msgs)))))
@@ -322,8 +322,6 @@
               (make-prop-type 'date
                               defined-in: 'srfi-19 to-string: date->secstring
                               from-string: secstring->date validator: date?))
-        (cons 'simple-tag-set
-              (make-prop-set 'string #t))
         (cons 'iref
               (make-prop-type 'iref base-type: string-type))
         (cons 'xref
@@ -425,6 +423,108 @@
 
 (define (xml->register-types)
   #f)
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --  AUTOMATIC DB ALLOCATION  ---------------------------------------
+
+(define (init-dbs #!optional (force #f))
+  (let ((db-empty?
+          (lambda () (null? (redis-keys "*")))))
+    (redis-select (*control-db-idx*))
+    (cond
+      ((db-empty?) #t)
+      (force (redis-flushdb))
+      (else (error "Database contains data; unable to initialize.")))
+    (redis-sadd "dbs-in-use" (*control-db-idx*))
+    (redis-sadd "dbs-in-use" (*scratch-db-idx*))
+    (redis-set "%CONTROL-DB" "1")
+    (redis-hset "scratch" "db-index" (*scratch-db-idx*))))
+
+(define (set-total-dbs)
+  ;; This query works w/ Redis 2.6, not 2.4.
+  (let ((result (redis-config "get" "databases")))
+    (when (not (null? result))
+      (*total-dbs* (string->number (cadr result))))))
+
+(define (first-available-index indices)
+  (let ((indices* (map string->number indices))
+        (last-idx (- (*total-dbs*) 1)))
+    (let loop ((i 2))
+      (cond
+        ((> i last-idx) #f)
+        ((memv i indices*) (loop (+ i 1)))
+        (else i)))))
+
+(define (get-db-index app-id)
+  (debug-msg "get-db-index")
+  (redis-select (*control-db-idx*))
+  (let ((exists (car (redis-exists app-id))))
+    (and (= exists 1)
+         (car (redis-hget app-id "db-index")))))
+
+(define (allocate-db app-id)
+  (debug-msg "allocate-db")
+  (redis-select (*control-db-idx*))
+  (let* ((allocated-dbs (redis-smembers "dbs-in-use"))
+         (available-index (first-available-index allocated-dbs)))
+    (if available-index
+      (let ((index (number->string available-index)))
+        (redis-transaction
+          (redis-hset app-id "db-index" index)
+          (redis-sadd "dbs-in-use" index))
+        index)
+      (abort "No dbs available."))))
+
+(define (deallocate-db app-id)
+  (let ((index (get-db-index app-id)))
+    (redis-transaction
+      (redis-select index)
+      (redis-flushdb)
+      (redis-select (*control-db-idx*))
+      (redis-hdel app-id "db-index")
+      (redis-srem "dbs-in-use" index))))
+
+(define (with-db-select thunk)
+  (let ((app (*current-app*)))
+    (when (not app)
+      (abort "Current app is not set."))
+    (let ((idx (get-db-index app)))
+      (redis-select idx)
+      (thunk))))
+
+(define (open-session #!optional app-id
+                   #!key (host (*default-host*)) (port (*default-port*))
+                   (force-init #f))
+  (debug-msg "open-session")
+  (when (not (*connected*))
+    (debug-msg "open-session: not connected")
+    (redis-connect host port)
+    (debug-msg "open-session: redis-connect done")
+    (*connected* #t))
+  (debug-msg "open-session: connected")
+  (set-total-dbs)
+  (redis-select (*control-db-idx*)) ; Select control DB
+  (debug-msg "open-session: select control db")
+  (let ((rs-exists (redis-exists "%CONTROL-DB")))
+    (when (= (car rs-exists) 0)
+      (debug-msg "open-session: '%CONTROL-DB' doesn't exist")
+      (init-dbs force-init))
+    (debug-msg "dbs initialized")
+    (if app-id
+      (begin
+        (debug-msg "there is an app id")
+        (*current-app* app-id)
+        (let ((index (or (get-db-index app-id)
+                         (allocate-db app-id))))
+          (debug-msg "got index; now select")
+          (redis-select index)
+          (debug-msg "selected")
+          index))
+      #t)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
