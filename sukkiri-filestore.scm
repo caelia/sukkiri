@@ -32,8 +32,8 @@
 
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  UTILITY FUNCTIONS  ---------------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --  UTILITY FUNCTIONS  -------------------------------------------------
 
 (define (eprintf fmt . args)
   (error (apply sprintf (cons fmt args))))
@@ -586,12 +586,12 @@
   (make-parameter
     (map flip-pair (*imt-video-types*))))
 
-(define (imt-index typestr)
+(define (imt-encode typestr)
   (let* ((parts (string-split typestr "/"))
-         (main-type (string->symbol (car parts)))
-         (subtype (string->symbol (cadr parts)))
+         (type-sym (string->symbol (car parts)))
+         (subtype-sym (string->symbol (cadr parts)))
          (subtype-table
-           (case main-type
+           (case type-sym
              ((application) (*imt-application-types*))
              ((audio) (*imt-audio-types*))
              ((image) (*imt-image-types*))
@@ -601,14 +601,14 @@
              ((text) (*imt-text-types*))
              ((video) (*imt-video-types*))
              (else (eprintf "Media type '~A' is not registered.")))))
-    (+ (alist-ref main-type (*imt-types*))
-       (alist-ref subtype subtype-table))))
+    (+ (alist-ref type-sym (*imt-types*))
+       (alist-ref subtype-sym subtype-table))))
 
-(define (imt-main-type idx)
+(define (imt-type-sym idx)
   (let ((idx* (bitwise-and idx #xf000)))
     (alist-ref idx* (*imt-types-reverse*))))
 
-(define (imt-subtype idx)
+(define (imt-subtype-sym idx)
   (let ((idx* (bitwise-and idx #x0fff))
         (subtype-table
           (case (imt-main-type idx)
@@ -622,9 +622,9 @@
             ((video) (*imt-video-types-reverse*)))))
     (alist-ref idx* subtype-table)))
 
-(define (imt-typestring idx)
-  (let ((main (imt-main-type idx))
-        (sub (imt-subtype idx)))
+(define (imt-decode idx)
+  (let ((main (imt-type-sym idx))
+        (sub (imt-subtype-sym idx)))
     (string-append
       (symbol->string main) "/" (symbol->string sub))))
 
@@ -635,9 +635,9 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  AUTOMATIC PATHS  ---------------------------------------------------
 
-(define (auto-path resource-id)
+(define (auto-path resource-id #!optional (root (*file-storage-path*)))
   (let* ((byte1
-           (arithmetic-shift (bitwise-and resource-id #xff000000) -24))
+           (arithmetic-shift resource-id -24))
          (byte2
            (arithmetic-shift (bitwise-and resource-id #xff0000) -16))
          (byte3
@@ -656,13 +656,49 @@
          (path2 (zpad bstr2 2))
          (path3 (zpad bstr3 2))
          (path4 (zpad bstr4 2)))
-    (make-pathname
-      (make-pathname
-        (make-pathname
-          path1
-          path2)
-        path3)
-      path4)))
+    (foldl make-pathname root (list path1 path2 path3 path4))))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ------------------------------------------------------------------------
+
+(define-record-type
+  fileref (make-fileref imt-code path) fileref? 
+  (imt-code fileref-imt-code) (path fileref-path))
+
+(register-prop-type
+  'fileref
+  to-string: (lambda (fr)
+               (let* ((code (fileref-imt-code fr))
+                      (byte1 (arithmetic-shift code -8))
+                      (byte2 (bitwise-and code #xff))
+                      (path (fileref-path fr)))
+                 (with-output-to-string
+                   (lambda ()
+                     (write-byte byte1)
+                     (write-byte byte2)
+                     (when path (write-string path))))))
+  from-string: (lambda (s)
+                 (with-input-from-string s
+                   (lambda ()
+                     (let* ((byte1 (read-byte))
+                            (byte2 (read-byte))
+                            (code (+ (arithmetic-shift byte1 8) byte2))
+                            (path (read-string))
+                            (path* (and (> (string-length path) 0)
+                                        path)))
+                       (make-fileref code path*)))))
+  validator: fileref?)
+
+(define (get-fileref-imt fr)
+  (imt-decode fileref-imt-code fr))
+
+(define (get-fileref-path fr res-id prop-name)
+  (or (fileref-path fr)
+      (make-pathname (auto-path res-id) prop-name)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
