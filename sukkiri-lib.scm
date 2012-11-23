@@ -505,29 +505,16 @@
       (lambda (r) (redis-sadd idx-name r))
       refs)))
 
-;; FIXME: Think we should URLencode the string to handle spaces
-(define (tag-index-add! tag #!optional (refs '()))
-  (index-add! tag refs prefix: "%TAG:"))
-
 (define (index-delete! name value #!optional (prefix "%HAS-PROP:"))
   (let ((idx-name (string-append prefix name)))
     (redis-srem name value)))
 
-(define (tag-index-delete! name value)
-  (index-delete! name value "%TAG:"))
-
 (define (index-exists? name value #!optional (prefix "%HAS-PROP"))
   (db-result->bool (redis-sismember name value)))
-
-(define (tag-index-exists? name value)
-  (index-exists? name value "%TAG:"))
 
 (define (get-index name #!optional (prefix "%HAS-PROP:"))
   (let ((idx-name (string-append prefix name)))
     (redis-sismember idx-name)))
-
-(define (get-tag-index name)
-  (get-index name "%TAG:"))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -555,6 +542,7 @@
 ;                  (redis-hset ,res-id ,prop-name (,ts new-val))
 ;                  (error "Invalid input!")))))))))
 
+;; FIXME! Need to make this extensible. Macro or hooks?
 (define (make-prop-responder res-id prop-sym prop-type)
   (let* ((type-def (hash-table-ref prop-types prop-type))
          (ts (type-def 'to-string))

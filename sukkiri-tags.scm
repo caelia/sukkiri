@@ -2,30 +2,9 @@
 ;;;   Copyright © 2012 by Matt Gushee <matt@gushee.net>
 ;;;   This program is open-source software, released under the
 ;;;   BSD License. See the accompanying LICENSE file for details.
-;;;
-;;; DB Administration & Sessions
-;;; ============================
-;;; Although you may use Sukkiri to store and query data with a simple
-;;; connection to any Redis server (i.e., using REDIS-CONNECT from
-;;; the redis-client extension, you may wish to segregate your data
-;;; from other applications that may be using the same server. To
-;;; facilitate this process, this library provides the INIT-SUKKIRI-DBS,
-;;; START-SUKKIRI-SERVER, and OPEN-SUKKIRI-DB procedures. The egg also
-;;; includes the 'sukkiri-admin' program, which provides a command-line
-;;; interface to the first two of these procedures.
 
 (module sukkiri-lib
         *
-;         (register-prop-type
-;          register-resource-type
-;          xml->register-types
-;          create-resource
-;          load-proxy-resource
-;          delete-resource!
-; ;         property-valid?
-; ;         resource-valid?
-;          open-session
-;          prop-responder)
 
         (import scheme)
         (import chicken)
@@ -36,11 +15,10 @@
         (import srfi-69)
 
         (use redis-client)
-        (use srfi-19)
         (use numbers)
         (use sets)
         (use irregex)
-        (use s11n) ; FIXME -- using because date->secstring is not working
+        (use sukkiri-lib)
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
@@ -106,9 +84,6 @@
 (define (resource-id id)
   (sprintf "%RESOURCE:~A" id))
 
-;(define (resource-type id)
-  ;(string->symbol (car (redis-hget (resource-id id) "%TYPE"))))
-
 (define (resource-type id)
   (string->symbol (car (redis-hget id "%TYPE"))))
 
@@ -118,12 +93,6 @@
 
 ;;; ====================================================================
 ;;; --  Storage  -------------------------------------------------------
-
-; (define (store-hash-table id ht)
-;   (hash-table-walk
-;     ht
-;     (lambda (k v)
-;       (redis-hset id k (prepare-value v)))))
 
 (define (store-list id lst)
   (for-each
@@ -140,17 +109,14 @@
          (stored (f id obj)))
     (and stored id)))
 
-; (define (store-anonymous-hash obj)
-  ; (store-anonymous-object obj store-hash-table))
-
 (define (store-anonymous-list obj)
   (store-anonymous-object store-list obj))
 
 (define (store-anonymous-set obj)
   (store-anonymous-object store-set obj))
 
-; ;;; ====================================================================
-; ;;; --  Retrieval  -----------------------------------------------------
+;;; ====================================================================
+;;; --  Retrieval  -----------------------------------------------------
 
 (define (retrieve-anonymous-list id)
   (let ((len (car (redis-llen id))))
@@ -159,15 +125,6 @@
 (define (retrieve-anonymous-set id)
   (list->set (redis-smembers id)))
 
-; (define (retrieve-anonymous-hash id)
-;   (let ((h (make-hash-table))
-;         (fields (redis-hkeys id)))
-;     (for-each
-;       (lambda (fld)
-;         (let ((raw-val (car (redis-hget id fld))))
-;           (hash-table-set! h fld (dbstring->any raw-val))))
-;       fields)
-;     h))
   
 ;;; ====================================================================
 ;;; --  Conversion  ----------------------------------------------------
@@ -212,26 +169,6 @@
          ((from-string) from)
          ((validator) val)
          (else #f))))))
-
-; (define prop-types
-;   (let ((pt-table (make-hash-table)))
-;       pt-table
-;       'string
-;       (make-pt-primitive identity identity string?))
-;     (hash-table-set!
-;       pt-table
-;       'char
-;       (make-pt-primitive
-;         (o list->string list) (o car string->list) char?))
-;     (hash-table-set!
-;       pt-table
-;       'number
-;       (make-pt-primitive number->string string->number number?))
-;     (hash-table-set!
-;       pt-table
-;       'boolean
-;       (make-pt-primitive boolean->string string->boolean boolean?))
-;     pt-table))
 
 (define (make-prop-type type #!key (base-type #f) (defined-in #f)
                         (to-string #f) (from-string #f) (validator #f))
@@ -416,180 +353,10 @@
 (define (register-resource-type type-name prop-specs)
   (hash-table-set! resource-types type-name prop-specs))
 
-;(define-record resource id type data)
-
-;(define (create-resource id type #!optional (data '()))
-;  (make-resource id type (alist->hash-table data)))
-
 (define (xml->register-types)
   #f)
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-
-
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  AUTOMATIC DB ALLOCATION  ---------------------------------------
-
-(define (init-dbs #!optional (force #f))
-  (let ((db-empty?
-          (lambda () (null? (redis-keys "*")))))
-    (redis-select (*control-db-idx*))
-    (cond
-      ((db-empty?) #t)
-      (force (redis-flushdb))
-      (else (error "Database contains data; unable to initialize.")))
-    (redis-sadd "dbs-in-use" (*control-db-idx*))
-    (redis-sadd "dbs-in-use" (*scratch-db-idx*))
-    (redis-set "%CONTROL-DB" "1")
-    (redis-hset "scratch" "db-index" (*scratch-db-idx*))))
-
-(define (set-total-dbs)
-  ;; This query works w/ Redis 2.6, not 2.4.
-  (let ((result (redis-config "get" "databases")))
-    (when (not (null? result))
-      (*total-dbs* (string->number (cadr result))))))
-
-(define (first-available-index indices)
-  (let ((indices* (map string->number indices))
-        (last-idx (- (*total-dbs*) 1)))
-    (let loop ((i 2))
-      (cond
-        ((> i last-idx) #f)
-        ((memv i indices*) (loop (+ i 1)))
-        (else i)))))
-
-(define (get-db-index app-id)
-  (debug-msg "get-db-index")
-  (redis-select (*control-db-idx*))
-  (let ((exists (car (redis-exists app-id))))
-    (and (= exists 1)
-         (car (redis-hget app-id "db-index")))))
-
-(define (allocate-db app-id)
-  (debug-msg "allocate-db")
-  (redis-select (*control-db-idx*))
-  (let* ((allocated-dbs (redis-smembers "dbs-in-use"))
-         (available-index (first-available-index allocated-dbs)))
-    (if available-index
-      (let ((index (number->string available-index)))
-        (redis-transaction
-          (redis-hset app-id "db-index" index)
-          (redis-sadd "dbs-in-use" index))
-        index)
-      (abort "No dbs available."))))
-
-(define (deallocate-db app-id)
-  (let ((index (get-db-index app-id)))
-    (redis-transaction
-      (redis-select index)
-      (redis-flushdb)
-      (redis-select (*control-db-idx*))
-      (redis-hdel app-id "db-index")
-      (redis-srem "dbs-in-use" index))))
-
-(define (with-db-select thunk)
-  (let ((app (*current-app*)))
-    (when (not app)
-      (abort "Current app is not set."))
-    (let ((idx (get-db-index app)))
-      (redis-select idx)
-      (thunk))))
-
-(define (open-session #!optional app-id
-                   #!key (host (*default-host*)) (port (*default-port*))
-                   (force-init #f))
-  (debug-msg "open-session")
-  (when (not (*connected*))
-    (debug-msg "open-session: not connected")
-    (redis-connect host port)
-    (debug-msg "open-session: redis-connect done")
-    (*connected* #t))
-  (debug-msg "open-session: connected")
-  (set-total-dbs)
-  (redis-select (*control-db-idx*)) ; Select control DB
-  (debug-msg "open-session: select control db")
-  (let ((rs-exists (redis-exists "%CONTROL-DB")))
-    (when (= (car rs-exists) 0)
-      (debug-msg "open-session: '%CONTROL-DB' doesn't exist")
-      (init-dbs force-init))
-    (debug-msg "dbs initialized")
-    (if app-id
-      (begin
-        (debug-msg "there is an app id")
-        (*current-app* app-id)
-        (let ((index (or (get-db-index app-id)
-                         (allocate-db app-id))))
-          (debug-msg "got index; now select")
-          (redis-select index)
-          (debug-msg "selected")
-          index))
-      #t)))
-
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-
-
-; ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-; ;;; --------------------------------------------------------------------
-; 
-; (define (get-property res-id prop-name)
-;   (let* ((res-type (car (redis-hget res-id "%TYPE")))
-;          (type-def (hash-table-ref resource-types res-type))
-;          ;(prop-spec (type-def prop-name))
-;          (prop-spec (alist-ref prop-name type-def string=?))
-;          (pt-name (prop-spec-type prop-spec))
-;          (pt-def (hash-table-ref prop-types pt-name))
-;          (convert (pt-def 'from-string))
-;          (required? (prop-spec-required? prop-spec)))
-;     (let ((rs (car (redis-hget res-id prop-name))))
-;       (cond
-;         ((and (null? rs) required?)
-;          (eprintf "Required property '~A' is missing." prop-name))
-;         ((null? rs)
-;          '())
-;         (else (convert rs))))))
-; 
-; (define (set-property res-id prop-name value #!optional (type-def #f))
-;   (let* ((res-type (car (redis-hget res-id "%TYPE")))
-;          (type-def (hash-table-ref resource-types res-type))
-;          (prop-spec (alist-ref prop-name type-def string=?))
-;          (pt-name (prop-spec-type prop-spec))
-;          (pt-def (hash-table-ref prop-types pt-name))
-;          (valid? (pt-def 'validator))
-;          (convert (pt-def 'to-string)))
-;     (if (valid? value)
-;       (redis-hset res-id prop-name (convert value))
-;       (error
-;         (sprintf
-;           "'~A' is not a valid value for property '~A' on object '~A'"
-;           value prop-name res-id)))))
-; 
-; (define (get-resource id)
-;   (let* ((type (string->symbol (car (redis-hget id "%TYPE"))))
-;          (type-def (hash-table-ref resource-types type))
-;          (fields (type-def 'fields))
-;          (result (make-hash-table)))
-;     (for-each
-;       (lambda (fld)
-;         (hash-table-set! result fld (get-property id fld type-def)))
-;       fields)
-;     result))
-; 
-; (define (set-resource! obj)
-;   (let* ((id (resource-id obj))
-;          (type (resource-type obj))
-;          (type-def (hash-table-ref resource-types type))
-;          (data (resource-data obj)))
-;     (redis-hset id "%TYPE" (symbol->string type))
-;     (hash-table-for-each
-;       data
-;       (lambda (k v)
-;         (set-property id k v type-def)))))
-;     
-; 
-; 
-; ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
@@ -635,25 +402,6 @@
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  PROXY OBJECTS  -------------------------------------------------
-
-; (define-syntax prop-responder
-;   (ir-macro-transformer
-;     (lambda (expr inj comp)
-;       (let* ((res-id (car expr))
-;              (prop-name (cadr expr))
-;              (prop-type (caddr expr))
-;              (type-def (hash-table-ref prop-types prop-type))
-;              (ts (type-def 'to-string))
-;              (fs (type-def 'from-string))
-;              (v (type-def 'validator)))
-;         `(lambda (arg . args)
-;            (if (null? args)
-;              (,fs (car (redis-hget ,res-id ,prop-name)))
-;              (let* ((new-val (car args))
-;                     (valid? (v new-val)))
-;                (if valid?
-;                  (redis-hset ,res-id ,prop-name (,ts new-val))
-;                  (error "Invalid input!")))))))))
 
 (define (make-prop-responder res-id prop-sym prop-type)
   (let* ((type-def (hash-table-ref prop-types prop-type))
