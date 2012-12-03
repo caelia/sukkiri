@@ -1,4 +1,4 @@
-;;; sukkiri-lib.scm -- A metadata store based on Redis
+;;; sukkiri-db.scm -- Redis interface layer for Sukkiri
 ;;;   Copyright © 2012 by Matt Gushee <matt@gushee.net>
 ;;;   This program is open-source software, released under the
 ;;;   BSD License. See the accompanying LICENSE file for details.
