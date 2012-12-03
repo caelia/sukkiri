@@ -1,6 +1,15 @@
-(compile -s -d0 -O3 sukkiri.scm -j sukkiri)
-(compile -s -d0 -O3 sukkiri.import.scm)
+(compile -s -d0 -O3 sukkiri-lib.scm -j sukkiri-lib)
+(compile -s -d0 -O3 sukkiri-lib.import.scm)
+(compile -s -d0 -O3 sukkiri-db.scm -j sukkiri-db)
+(compile -s -d0 -O3 sukkiri-db.import.scm)
+(compile -s -d0 -O3 sukkiri-tags.scm -j sukkiri-tags)
+(compile -s -d0 -O3 sukkiri-tags.import.scm)
+(compile -s -d0 -O3 sukkiri-vocabs.scm -j sukkiri-vocabs)
+(compile -s -d0 -O3 sukkiri-vocabs.import.scm)
 (install-extension
   'sukkiri
-  '("sukkiri.so" "sukkiri.import.so")
+  '("sukkiri-lib.so" "sukkiri-lib.import.so"
+    "sukkiri-db.so" "sukkiri-db.import.so"
+    "sukkiri-tags.so" "sukkiri-tags.import.so"
+    "sukkiri-vocabs.so" "sukkiri-vocabs.import.so")
   '((version "0.1")))
