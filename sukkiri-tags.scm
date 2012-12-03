@@ -68,8 +68,11 @@
 
 (register-set-type 'simple-tag-set 'string
                    post-hook:
-                   (lambda (res-id prop-name new-val)
-                     (tag-index-add!
+                   (lambda (res-id _ new-val)
+                     (set-for-each
+                       (lambda (m)
+                         (tag-index-add! m (list res-id)))
+                       new-val)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
