@@ -4,7 +4,12 @@
 ;;;   BSD License. See the accompanying LICENSE file for details.
 
 (module sukkiri-tags
-        *
+        ;*
+        (*sukkiri-tags-debug*
+         tag-index-add!
+         tag-index-delete!
+         tag-index-exists?
+         get-tag-index)
 
         (import scheme)
         (import chicken)
@@ -78,11 +83,3 @@
 
 ) ; END MODULE
 
-
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --------------------------------------------------------------------
-
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-;;; ====================================================================
-;;; --------------------------------------------------------------------

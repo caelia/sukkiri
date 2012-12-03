@@ -15,17 +15,19 @@
 ;;; interface to the first two of these procedures.
 
 (module sukkiri-db
-        *
-;         (register-prop-type
-;          register-resource-type
-;          xml->register-types
-;          create-resource
-;          load-proxy-resource
-;          delete-resource!
-; ;         property-valid?
-; ;         resource-valid?
-;          open-session
-;          prop-responder)
+;        *
+        (*total-dbs*
+         *default-host*
+         *default-port*
+         *control-db-idx*
+         *scratch-db-idx*
+         *connected*
+         *current-app*
+         *sukkiri-db-debug*
+         allocate-db
+         deallocate-db
+         with-db-select
+         open-db-session)
 
         (import scheme)
         (import chicken)
@@ -36,11 +38,11 @@
         (import srfi-69)
 
         (use redis-client)
-        (use srfi-19)
-        (use numbers)
-        (use sets)
-        (use irregex)
-        (use s11n) ; FIXME -- using because date->secstring is not working
+        ;(use srfi-19)
+        ;(use numbers)
+        ;(use sets)
+        ;(use irregex)
+        ;(use s11n) ; FIXME -- using because date->secstring is not working
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
@@ -154,22 +156,22 @@
       (redis-select idx)
       (thunk))))
 
-(define (open-session #!optional app-id
+(define (open-db-session #!optional app-id
                    #!key (host (*default-host*)) (port (*default-port*))
                    (force-init #f))
-  (debug-msg "open-session")
+  (debug-msg "open-db-session")
   (when (not (*connected*))
-    (debug-msg "open-session: not connected")
+    (debug-msg "open-db-session: not connected")
     (redis-connect host port)
-    (debug-msg "open-session: redis-connect done")
+    (debug-msg "open-db-session: redis-connect done")
     (*connected* #t))
-  (debug-msg "open-session: connected")
+  (debug-msg "open-db-session: connected")
   (set-total-dbs)
   (redis-select (*control-db-idx*)) ; Select control DB
-  (debug-msg "open-session: select control db")
+  (debug-msg "open-db-session: select control db")
   (let ((rs-exists (redis-exists "%CONTROL-DB")))
     (when (= (car rs-exists) 0)
-      (debug-msg "open-session: '%CONTROL-DB' doesn't exist")
+      (debug-msg "open-db-session: '%CONTROL-DB' doesn't exist")
       (init-dbs force-init))
     (debug-msg "dbs initialized")
     (if app-id

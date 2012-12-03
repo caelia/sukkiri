@@ -5,6 +5,6 @@
  (test-depends test)
  (files
    "sukkiri.meta" "sukkiri.setup" "sukkiri-lib.scm" "sukkiri-db.scm"
-   "sukkiri-tags.scm" "sukkiri-vocabs.scm" "sukkiri-test.scm")
+   "sukkiri-tags.scm" "sukkiri-vocabs.scm" "sukkiri.scm" "sukkiri-test.scm")
  (author "Matt Gushee")
  (synopsis "A metadata persistence system based on Redis."))

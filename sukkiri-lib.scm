@@ -2,30 +2,33 @@
 ;;;   Copyright © 2012 by Matt Gushee <matt@gushee.net>
 ;;;   This program is open-source software, released under the
 ;;;   BSD License. See the accompanying LICENSE file for details.
-;;;
-;;; DB Administration & Sessions
-;;; ============================
-;;; Although you may use Sukkiri to store and query data with a simple
-;;; connection to any Redis server (i.e., using REDIS-CONNECT from
-;;; the redis-client extension, you may wish to segregate your data
-;;; from other applications that may be using the same server. To
-;;; facilitate this process, this library provides the INIT-SUKKIRI-DBS,
-;;; START-SUKKIRI-SERVER, and OPEN-SUKKIRI-DB procedures. The egg also
-;;; includes the 'sukkiri-admin' program, which provides a command-line
-;;; interface to the first two of these procedures.
 
 (module sukkiri-lib
-        *
-;         (register-prop-type
-;          register-resource-type
-;          xml->register-types
-;          create-resource
-;          load-proxy-resource
-;          delete-resource!
-; ;         property-valid?
-; ;         resource-valid?
-;          open-session
-;          prop-responder)
+;        *
+        (*sukkiri-debug*
+         make-prop-type
+         make-prop-list
+         make-prop-set
+         make-irregex-validator
+         make-enum-validator
+         register-prop-type
+         register-list-type
+         register-set-type
+         unregister-prop-type
+         make-prop-spec
+         create-atomic-prop-spec
+         create-struct-prop-spec
+         register-resource-type
+         xml->register-types
+         index-add!
+         index-delete!
+         index-exists?
+         get-index
+         make-prop-responder
+         create-resource-proxy
+         create-resource
+         load-resource-proxy
+         delete-resource!)
 
         (import scheme)
         (import chicken)
@@ -637,13 +640,4 @@
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
-)
-
-
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --------------------------------------------------------------------
-
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-;;; ====================================================================
-;;; --------------------------------------------------------------------
+) ; END MODULE

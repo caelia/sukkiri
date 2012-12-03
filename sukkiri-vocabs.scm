@@ -4,10 +4,15 @@
 ;;;   the accompanying LICENSE file for details.
 
 (module sukkiri-vocabs
-        *
-        (import scheme)
-        (import chicken)
-        
+;        *
+        (vocab-index-add!
+         term-index-add!
+         vocab-index-delete!
+         term-index-delete!
+         vocab-index-exists?
+         term-index-exists?)
+
+        (import scheme chicken)
         (use sukkiri-lib)
 
 (define (vocab-index-add! vocab-name terms)
@@ -31,14 +36,5 @@
   (let ((pfx (string-append "%VOCAB:" vocab ":")))
     (index-exists? vocab term pfx)))
 
-)
-
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; ------------------------------------------------------------------------
-
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-;;; ========================================================================
-;;; ------------------------------------------------------------------------
-
+) ; END MODULE
 
