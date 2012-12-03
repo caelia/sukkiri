@@ -92,6 +92,8 @@
       input-set)
     output-set))
 
+(define (null-hook _ _ _) #f)
+
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
@@ -234,10 +236,13 @@
 ;     pt-table))
 
 (define (make-prop-type type #!key (base-type #f) (defined-in #f)
-                        (to-string #f) (from-string #f) (validator #f))
+                        (to-string #f) (from-string #f) (validator #f)
+                        (pre-hook #f) (post-hook #f))
   (lambda (msg)
     (case msg
       ((type) type)
+      ((pre-hook) pre-hook)
+      ((post-hook) post-hook)
       ((base-type) base-type)
       ((defined-in) defined-in)
       ((to-string)
@@ -251,11 +256,14 @@
            (base-type 'validator)))
       (else (eprintf "Unrecognized message: ~A" msg)))))
 
-(define (make-prop-list element-type-sym)
+(define (make-prop-list element-type-sym
+                        #!key (pre-hook #f) (post-hook #f))
   (let ((element-type (hash-table-ref prop-types element-type-sym)))
     (lambda (msg)
       (case msg
         ((type) 'list)
+        ((pre-hook) pre-hook)
+        ((post-hook) post-hook)
         ((element-type) element-type-sym)
         ((to-string)
          (lambda (lst)
@@ -275,12 +283,14 @@
                (else (loop (cdr lst*)))))))
         (else (eprintf "Unrecognized message: ~A" msg))))))
 
-(define (make-prop-set element-type-sym #!optional (tag-set? #f))
+(define (make-prop-set element-type-sym
+                       #!key (pre-hook #f) (post-hook #f))
   (lambda (msg)
     (let ((element-type (hash-table-ref prop-types element-type-sym)))
       (case msg
         ((type) 'set)
-        ((tag-set?) tag-set?)
+        ((pre-hook) pre-hook)
+        ((post-hook) post-hook)
         ((element-type) element-type-sym)
         ((to-string)
          (lambda (a)
@@ -322,8 +332,6 @@
               (make-prop-type 'date
                               defined-in: 'srfi-19 to-string: date->secstring
                               from-string: secstring->date validator: date?))
-        (cons 'simple-tag-set
-              (make-prop-set 'string #t))
         (cons 'iref
               (make-prop-type 'iref base-type: string-type))
         (cons 'xref
@@ -342,7 +350,7 @@
 
 (define (register-prop-type type #!key (base-type #f) (defined-in #f)
                             (to-string #f) (from-string #f) (validator #f)
-                            (force! #f))
+                            (pre-hook #f) (post-hook #f) (force! #f))
   (when (and (hash-table-exists? prop-types type)
              (not force!))
     (eprintf "Property type ~A already exists." type))
@@ -351,26 +359,28 @@
     type
     (make-prop-type
       type base-type: base-type defined-in: defined-in
-      to-string: to-string from-string: from-string validator: validator)))
+      to-string: to-string from-string: from-string validator: validator
+      pre-hook: pre-hook post-hook: post-hook)))
 
-(define (register-list-type type-sym element-type #!optional (force! #f))
+(define (register-list-type type-sym element-type
+                            #!key (force! #f) (pre-hook #f) (post-hook #f))
   (when (and (hash-table-exists? prop-types type-sym)
              (not force!))
     (eprintf "Property type ~A already exists." type-sym))
   (hash-table-set!
     prop-types
     type-sym
-    (make-prop-list element-type)))
+    (make-prop-list element-type pre-hook: pre-hook post-hook: post-hook)))
 
 (define (register-set-type type-sym element-type
-                           #!key (force! #f) (tag-set? #f))
+                           #!key (force! #f) (pre-hook #f) (post-hook #f))
   (when (and (hash-table-exists? prop-types type-sym)
              (not force!))
     (eprintf "Property type ~A already exists." type-sym))
   (hash-table-set!
     prop-types
     type-sym
-    (make-prop-set element-type tag-set?)))
+    (make-prop-set element-type pre-hook: pre-hook post-hook: post-hook)))
 
 (define (unregister-prop-type type)
   (hash-table-delete! prop-types type))
@@ -542,15 +552,16 @@
 ;                  (redis-hset ,res-id ,prop-name (,ts new-val))
 ;                  (error "Invalid input!")))))))))
 
-;; FIXME! Need to make this extensible. Macro or hooks?
 (define (make-prop-responder res-id prop-sym prop-type)
   (let* ((type-def (hash-table-ref prop-types prop-type))
          (ts (type-def 'to-string))
          (fs (type-def 'from-string))
          (v (type-def 'validator))
          (prop-name (symbol->string prop-sym))
-         (tag-set? (and (eqv? (type-def 'type) 'set)
-                        (type-def 'tag-set?))))
+         (pre-hook (or (type-def 'pre-hook)
+                       null-hook))
+         (post-hook (or (type-def 'post-hook)
+                       null-hook)))
     (lambda args
       (if (null? args)
         (fs (car (redis-hget res-id prop-name)))
@@ -558,13 +569,9 @@
                (valid? (v new-val)))
           (if valid? 
             (begin
+              (pre-hook res-id prop-name (ts new-val))
               (redis-hset res-id prop-name (ts new-val))
-              (if tag-set?
-                (set-for-each
-                  (lambda (m)
-                    (tag-index-add! m (list res-id)))
-                  new-val)
-                (index-add! prop-name (list res-id))))
+              (post-hook res-id prop-name (ts new-val)))
             (error "Invalid input!")))))))
 
 (define (create-resource-proxy id type)
