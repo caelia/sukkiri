@@ -238,23 +238,28 @@
 (define (make-prop-type type #!key (base-type #f) (defined-in #f)
                         (to-string #f) (from-string #f) (validator #f)
                         (pre-hook #f) (post-hook #f))
-  (lambda (msg)
-    (case msg
-      ((type) type)
-      ((pre-hook) pre-hook)
-      ((post-hook) post-hook)
-      ((base-type) base-type)
-      ((defined-in) defined-in)
-      ((to-string)
-       (or to-string
-           (base-type 'to-string)))
-      ((from-string)
-       (or from-string
-           (base-type 'from-string)))
-      ((validator)
-       (or validator
-           (base-type 'validator)))
-      (else (eprintf "Unrecognized message: ~A" msg)))))
+  (let ((post-hook
+          (or post-hook
+              (lambda (res-id prop-name _)
+                (index-add! prop-name (list res-id))))))
+
+    (lambda (msg)
+      (case msg
+        ((type) type)
+        ((pre-hook) pre-hook)
+        ((post-hook) post-hook)
+        ((base-type) base-type)
+        ((defined-in) defined-in)
+        ((to-string)
+         (or to-string
+             (base-type 'to-string)))
+        ((from-string)
+         (or from-string
+             (base-type 'from-string)))
+        ((validator)
+         (or validator
+             (base-type 'validator)))
+        (else (eprintf "Unrecognized message: ~A" msg))))))
 
 (define (make-prop-list element-type-sym
                         #!key (pre-hook #f) (post-hook #f))
