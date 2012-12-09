@@ -586,6 +586,7 @@
 
 (define (create-resource-proxy id type)
   (let* ((responders '())
+         (delete-hooks '())
          (prop-specs
            (hash-table-ref resource-types type))
          (add-responder!
@@ -603,8 +604,14 @@
         ((id) id)
         ((type) type)
         ((resp) responders) ; just for debugging
-        ((add-resp) (for-each add-responder! args))
-        (else (apply (alist-ref arg responders) args))))))
+        ((add-resp!)
+         (for-each add-responder! args))
+        ((add-delete-hook!)
+         (set! delete-hooks (cons (car args) delete-hooks)))
+        ((run-delete-hooks)
+         (for-each eval delete-hooks))
+        (else
+          (apply (alist-ref arg responders) args))))))
 
 (define (create-resource id type #!optional (prop-data '()))
   (redis-hset id "%TYPE" (symbol->string type))
@@ -642,10 +649,12 @@
 
 (define (delete-resource! id)
   ;; First delete index references
-  (let* ((props (redis-hkeys id)))
+  (let* ((props (redis-hkeys id))
+         (proxy (get-resource-proxy id))
     (for-each
       (lambda (p) (index-delete! p id))
       props)
+    (proxy 'run-delete-hooks)
     (redis-del id)
     (hash-table-delete proxies id)))
 
