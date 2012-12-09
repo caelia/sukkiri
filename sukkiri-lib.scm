@@ -560,6 +560,8 @@
 ;                  (redis-hset ,res-id ,prop-name (,ts new-val))
 ;                  (error "Invalid input!")))))))))
 
+(define proxies (make-hash-table))
+
 (define (make-prop-responder res-id prop-sym prop-type)
   (let* ((type-def (hash-table-ref prop-types prop-type))
          (ts (type-def 'to-string))
@@ -627,8 +629,16 @@
 (define (load-resource-proxy id)
   (let ((exists? (db-result->bool (redis-exists id))))
     (unless exists? (eprintf "Resource ~A does not exist." id))
-    (let* ((type (resource-type id)))
-      (create-resource-proxy id type))))
+    (let* ((type (resource-type id))
+           (proxy (create-resource-proxy id type)))
+      (hash-table-set! proxies id proxy)
+      proxy)))
+
+(define (get-resource-proxy id)
+  (let ((exists (hash-table-exists? proxies id)))
+    (if exists
+      (hash-table-ref proxies id)
+      (load-resource-proxy id))))
 
 (define (delete-resource! id)
   ;; First delete index references
@@ -636,7 +646,8 @@
     (for-each
       (lambda (p) (index-delete! p id))
       props)
-    (redis-del id)))
+    (redis-del id)
+    (hash-table-delete proxies id)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
