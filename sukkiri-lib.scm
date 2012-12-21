@@ -43,20 +43,21 @@
         (use numbers)
         (use sets)
         (use irregex)
+        (use yasos)
         (use s11n) ; FIXME -- using because date->secstring is not working
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  GLOBAL PARAMETERS  ---------------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  GLOBAL PARAMETERS  -------------------------------------------
 
 (define *sukkiri-debug* (make-parameter #f))
 
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  UTILITY FUNCTIONS  ---------------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  UTILITY FUNCTIONS  -------------------------------------------
 
 (define (eprintf fmt . args)
   (error (apply sprintf (cons fmt args))))
@@ -97,12 +98,12 @@
 
 (define (null-hook _ _ _) #f)
 
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  GENERIC STORAGE PROTOCOL  --------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  GENERIC STORAGE PROTOCOL  ------------------------------------
 
 (define (generate-resource-id)
   (let ((base-id (redis-incr "%RESOURCE-ID")))
@@ -200,12 +201,22 @@
         (deserialize)))))
   ;(o seconds->date inexact->exact string->number))
 
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  PROPERTY TYPES  ------------------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  PROPERTIES  ------------------------------------------------------
+;;; ------  Interface-------------------------------------------------------
+
+(define-predicate property?) 
+(define-operation (prop-type obj))
+(define-operation (base-type obj))
+(define-operation (get-val obj))
+(define-operation (set-val! obj new-val))
+
+;;; ========================================================================
+;;; ------  Implementation  ------------------------------------------------
 
 (define-syntax make-pt-primitive
   (syntax-rules ()
@@ -217,26 +228,6 @@
          ((from-string) from)
          ((validator) val)
          (else #f))))))
-
-; (define prop-types
-;   (let ((pt-table (make-hash-table)))
-;       pt-table
-;       'string
-;       (make-pt-primitive identity identity string?))
-;     (hash-table-set!
-;       pt-table
-;       'char
-;       (make-pt-primitive
-;         (o list->string list) (o car string->list) char?))
-;     (hash-table-set!
-;       pt-table
-;       'number
-;       (make-pt-primitive number->string string->number number?))
-;     (hash-table-set!
-;       pt-table
-;       'boolean
-;       (make-pt-primitive boolean->string string->boolean boolean?))
-;     pt-table))
 
 (define (make-prop-type type #!key (base-type #f) (defined-in #f)
                         (to-string #f) (from-string #f) (validator #f)
@@ -393,12 +384,12 @@
 (define (unregister-prop-type type)
   (hash-table-delete! prop-types type))
 
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  RESOURCE TYPES  ------------------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  RESOURCE TYPES  ----------------------------------------------
 
 (define resource-types (make-hash-table))
  
@@ -444,75 +435,12 @@
 (define (xml->register-types)
   #f)
 
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-; ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-; ;;; --------------------------------------------------------------------
-; 
-; (define (get-property res-id prop-name)
-;   (let* ((res-type (car (redis-hget res-id "%TYPE")))
-;          (type-def (hash-table-ref resource-types res-type))
-;          ;(prop-spec (type-def prop-name))
-;          (prop-spec (alist-ref prop-name type-def string=?))
-;          (pt-name (prop-spec-type prop-spec))
-;          (pt-def (hash-table-ref prop-types pt-name))
-;          (convert (pt-def 'from-string))
-;          (required? (prop-spec-required? prop-spec)))
-;     (let ((rs (car (redis-hget res-id prop-name))))
-;       (cond
-;         ((and (null? rs) required?)
-;          (eprintf "Required property '~A' is missing." prop-name))
-;         ((null? rs)
-;          '())
-;         (else (convert rs))))))
-; 
-; (define (set-property res-id prop-name value #!optional (type-def #f))
-;   (let* ((res-type (car (redis-hget res-id "%TYPE")))
-;          (type-def (hash-table-ref resource-types res-type))
-;          (prop-spec (alist-ref prop-name type-def string=?))
-;          (pt-name (prop-spec-type prop-spec))
-;          (pt-def (hash-table-ref prop-types pt-name))
-;          (valid? (pt-def 'validator))
-;          (convert (pt-def 'to-string)))
-;     (if (valid? value)
-;       (redis-hset res-id prop-name (convert value))
-;       (error
-;         (sprintf
-;           "'~A' is not a valid value for property '~A' on object '~A'"
-;           value prop-name res-id)))))
-; 
-; (define (get-resource id)
-;   (let* ((type (string->symbol (car (redis-hget id "%TYPE"))))
-;          (type-def (hash-table-ref resource-types type))
-;          (fields (type-def 'fields))
-;          (result (make-hash-table)))
-;     (for-each
-;       (lambda (fld)
-;         (hash-table-set! result fld (get-property id fld type-def)))
-;       fields)
-;     result))
-; 
-; (define (set-resource! obj)
-;   (let* ((id (resource-id obj))
-;          (type (resource-type obj))
-;          (type-def (hash-table-ref resource-types type))
-;          (data (resource-data obj)))
-;     (redis-hset id "%TYPE" (symbol->string type))
-;     (hash-table-for-each
-;       data
-;       (lambda (k v)
-;         (set-property id k v type-def)))))
-;     
-; 
-; 
-; ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-
-
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  DATABASE INDEXES  ----------------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  DATABASE INDEXES  --------------------------------------------
 
 (define (index-add! name #!optional (refs '()) #!key (prefix "%HAS-PROP:"))
   (print name)
@@ -534,12 +462,12 @@
   (let ((idx-name (string-append prefix name)))
     (redis-sismember idx-name)))
 
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  PROXY OBJECTS  -------------------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  PROXY OBJECTS  -----------------------------------------------
 
 ; (define-syntax prop-responder
 ;   (ir-macro-transformer
@@ -658,6 +586,23 @@
     (redis-del id)
     (hash-table-delete proxies id)))
 
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 ) ; END MODULE
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ------------------------------------------------------------------------
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ------------------------------------------------------------------------
+;;; ------  Interface  -----------------------------------------------------
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+;;; ========================================================================
+;;; ------------------------------------------------------------------------
+
+;;; ========================================================================
+;;; ------  Implementation  ------------------------------------------------
+
