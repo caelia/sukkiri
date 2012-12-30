@@ -41,6 +41,7 @@
         (use redis-client)
         (use srfi-19)
         (use numbers)
+        (use mathh)
         (use sets)
         (use irregex)
         (use yasos)
@@ -207,16 +208,228 @@
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  PROPERTIES  ------------------------------------------------------
-;;; ------  Interface-------------------------------------------------------
+
+;;; ========================================================================
+;;; ----  Basic property type  ---------------------------------------------
+
+;;; ------  Interface  -----------------------------------------------------
 
 (define-predicate property?) 
 (define-operation (prop-type obj))
 (define-operation (base-type obj))
 (define-operation (get-val obj))
 (define-operation (set-val! obj new-val))
+(define-operation (->db-string obj))
+(define-operation (<-db-string obj))
+(define-operation (store obj))
+(define-operation (retrieve obj))
+
+;;; ------  Implementation  ------------------------------------------------
+
+;;; make-property should not be used directly in application code. It is
+;;;   intended to be a basis for defining more specific types in extension
+;;;   code.
+(define (make-property ptype base #!key (init-val #f) (valid? (lambda (_) #f))
+                       (to-string (lambda (x) x)) (from-string (lambda (s) s)))
+  (let ((value init-val)
+        (db-result #f))
+    (object
+      ((property? self) #t)
+      ((prop-type self) ptype)
+      ((base-type self) base)
+      ((get-val self) value)
+      ((set-val! self new-val)
+       (if (valid? new-val)
+         (set! value new-val)
+         (error (sprintf "Invalid input for ~A!" ptype))))
+      ((store self new-val) (redis-hset res-id prop-name (to-string new-val)))
+      ((retrieve self)
+       (let ((rs (redis-hget res-id prop-name)))
+         (to-string (car rs))))
+      (else
+        (error (sprintf "Unrecognized message."))))))
+
 
 ;;; ========================================================================
+;;; ----  String Type  -----------------------------------------------------
+
+;;; ------  Interface-------------------------------------------------------
+
+(define-predicate string-property?)
+
 ;;; ------  Implementation  ------------------------------------------------
+
+(define (make-string-property #!key (init-val #f) (valid? string?))
+  (object-with-ancestors ((super (make-property "string" 'string
+                                                init-val: init-val
+                                                valid?: valid?)))
+    ((string-property? self) #t)))
+
+
+;;; ========================================================================
+;;; ----  Boolean Type  ----------------------------------------------------
+
+;;; ------  Interface  -----------------------------------------------------
+
+(define-predicate boolean-property?)
+
+;;; ------  Implementation  ------------------------------------------------
+
+;;; ========================================================================
+;;; ----  Regular Expression Type  -----------------------------------------
+
+;;; ------  Interface-------------------------------------------------------
+
+(define-predicate regex-property?)
+
+;;; ------  Implementation  ------------------------------------------------
+
+(define (make-regex-property name pattern #!key (init-val #f))
+  (let* ((rx (irregex pattern))
+         (valid? (lambda (s) (irregex-match rx s))))
+    (object-with-ancestors ((super (make-property name 'string
+                                                  init-val: init-val
+                                                  valid?: valid?)))
+      ((regex-property? self) #t))))
+
+
+;;; ========================================================================
+;;; ----  Numeric Types  ---------------------------------------------------
+
+;;; ------  Interface  -----------------------------------------------------
+
+(define-predicate numeric-property?)
+(define-predicate integer-property?)
+(define-predicate fixed-prec-property?)
+(define-predicate real-property?)
+(define-operation (min-val obj))
+(define-operation (max-val obj))
+(define-operation (anchor-val obj))
+(define-operation (interval obj))
+
+;;; ------  Implementation  ------------------------------------------------ 
+
+(define (make-numeric-property type-name
+                           #!optional (interval #f)
+                           #!key (min-val #f) (max-val #f) (anchor-val #f)
+                           (at-interval? (lambda (_) #t)) (init-val #f))
+  (let* ((in-range?
+           (cond
+             ((and min-val max-val)
+              (lambda (n) (and (>= n min-val) (<= n max-val))))
+             (min-val
+               (lambda (n) (>= n min-val)))
+             (max-val
+               (lambda (n) (<= n max-val)))
+             (else
+               (lambda (_) #t))))
+         (valid?
+           (lambda (n) (and (in-range? n) (at-interval? n)))))
+    (object-with-ancestors ((super (make-property type-name init-val: init-val
+                                                  valid?: valid)))
+      ((numeric-property?) #t)
+      ((min-val) min-val)
+      ((max-val) max-val)
+      ((anchor-val) anchor-val)
+      ((interval) interval))))
+
+(define (make-integer-property #!optional (interval 1)
+                               #!key (min-val #f) (max-val #f) (anchor-val #f)
+                               (init-val #f))
+  (let ((at-interval?
+          (lambda (n)
+            (let ((delta
+                    (cond
+                      (min-val (- n min-val))
+                      (max-val (- max-val n))
+                      (anchor-val (- n anchor-val))
+                      (else n))))
+              (= (modulo delta interval) 0)))))
+  (object-with-ancestors ((super (make-numeric-property "integer" interval
+                                                        at-interval?: at-interval?
+                                                        min-val: min-val
+                                                        max-val: max-val
+                                                        anchor-val: anchor-val
+                                                        init-val: init-val)))
+    ((integer-property?) #t))))
+
+(define (make-fixed-prec-property decimal-places 
+                                  #!optional (interval #f)
+                                  #!key (min-val #f) (max-val #f) (anchor-val #f)
+                                  (init-val #f))
+  (let* ((negative
+           (lambda (x) (- (abs x))))
+         (interval
+           (or interval (expt 10 (negative decimal-places))))
+         (at-interval?
+           (lambda (x)
+             (let ((delta
+                     (cond
+                       (min-val (- n min-val))
+                       (max-val (- max-val n))
+                       (anchor-val (- n anchor-val))
+                       (else n))))
+               (= (fpmod delta interval) 0.0)))))
+  (object-with-ancestors ((super (make-numeric-property "fixed-precision" interval
+                                                        at-interval?: at-interval?
+                                                        min-val: min-val
+                                                        max-val: max-val
+                                                        anchor-val: anchor-val
+                                                        init-val: init-val)))
+    ((fixed-prec-property?) #t))))
+
+(define (make-real-property #!key (min-val #f) (max-val #f) (init-val #f))
+  (object-with-ancestors ((super (make-numeric-property "real"
+                                                        min-val: min-val
+                                                        max-val: max-val
+                                                        init-val: init-val)))
+    ((real-property?) #t)))
+
+
+;;; ========================================================================
+;;; ----  Enumerated Type  -------------------------------------------------
+
+;;; ------  Interface  -----------------------------------------------------
+
+(define-predicate enum-type?)
+(define-operation validate obj value)
+(define-operation choice->index obj)
+(define-operation index->choice obj)
+(define-operation choices)
+(define-operation enum-size obj)
+(define-operation add-choice! obj new-choice)
+(define-operation remove-choice! obj choice)
+
+;;; ------  Implementation  ------------------------------------------------
+
+(define (make-enum-type type-name #!optional (choices '()))
+  (let ((valid? (lambda (x) (member x choices))))
+    (object
+      ((validate self value) (valid? value))
+      ((choice->index self choice) (list-index (lambda (elt) (equal? elt choice)) choices))
+      ((index->choice self index) (list-ref choices index))
+      ((choices self) choices)
+      ((enum-size self) (length choices))
+      ((add-choice! self new-choice) (set! choices (cons new-choice choices)))
+      ((remove-choice! self choice) (delete! choice choices)))))
+
+
+;;; ========================================================================
+;;; ----  LIST PROPERTY  ---------------------------------------------------
+
+;;; ------  Interface  -----------------------------------------------------
+
+(define-predicate list-property?)
+
+;;; ------  Implementation  ------------------------------------------------
+
+;;; ========================================================================
+;;; ------------------------------------------------------------------------
+
+;;; ------  Interface  -----------------------------------------------------
+
+;;; ------  Implementation  ------------------------------------------------
+
 
 (define-syntax make-pt-primitive
   (syntax-rules ()
