@@ -219,9 +219,7 @@
 (define-operation (base-type obj))
 (define-operation (get-val obj))
 (define-operation (set-val! obj new-val))
-(define-operation (->db-string obj))
-(define-operation (<-db-string obj))
-(define-operation (store obj))
+(define-operation (store obj new-val))
 (define-operation (retrieve obj))
 
 ;;; ------  Implementation  ------------------------------------------------
@@ -229,8 +227,9 @@
 ;;; make-property should not be used directly in application code. It is
 ;;;   intended to be a basis for defining more specific types in extension
 ;;;   code.
-(define (make-property ptype base #!key (init-val #f) (valid? (lambda (_) #f))
-                       (to-string (lambda (x) x)) (from-string (lambda (s) s)))
+(define (make-property ptype base res-id prop-name #!key (init-val #f)
+                       (valid? (lambda (_) #f)) (to-string (lambda (x) x))
+                       (from-string (lambda (s) s)))
   (let ((value init-val)
         (db-result #f))
     (object
@@ -259,10 +258,9 @@
 
 ;;; ------  Implementation  ------------------------------------------------
 
-(define (make-string-property #!key (init-val #f) (valid? string?))
-  (object-with-ancestors ((super (make-property "string" 'string
-                                                init-val: init-val
-                                                valid?: valid?)))
+(define (make-string-property res-id prop-name #!key (init-val #f) (valid? string?))
+  (object-with-ancestors ((super (make-property "string" 'string res-id prop-name
+                                                init-val: init-val valid?: valid?)))
     ((string-property? self) #t)))
 
 
@@ -275,6 +273,20 @@
 
 ;;; ------  Implementation  ------------------------------------------------
 
+(define (make-boolean-property res-id prop-name #!key (init-val #f) (valid? boolean?))
+  (let ((ts
+          (lambda (b)
+              (if b "True" "False")))
+        (fs
+          (lambda (s) 
+            (cond
+              ((string=? s "True") #t)
+              ((string=? s "False") #f)))))
+  (object-with-ancestors ((super (make-property "boolean" 'boolean res-id prop-name
+                                                init-val: init-val valid?: valid?
+                                                to-string: ts from-string fs)))
+    ((boolean-property? self) #t)))
+
 ;;; ========================================================================
 ;;; ----  Regular Expression Type  -----------------------------------------
 
@@ -284,7 +296,7 @@
 
 ;;; ------  Implementation  ------------------------------------------------
 
-(define (make-regex-property name pattern #!key (init-val #f))
+(define (make-regex-property name pattern res-id prop-name #!key (init-val #f))
   (let* ((rx (irregex pattern))
          (valid? (lambda (s) (irregex-match rx s))))
     (object-with-ancestors ((super (make-property name 'string
