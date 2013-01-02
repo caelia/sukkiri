@@ -337,4 +337,31 @@
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  DATABASE INDEXES  ------------------------------------------------
+
+(define (index-add! name #!optional (refs '()) #!key (prefix "%HAS-PROP:"))
+  (print name)
+  (display "REFS: ")
+  (pp refs)
+  (let ((idx-name (string-append prefix name)))
+    (for-each
+      (lambda (r) (redis-sadd idx-name r))
+      refs)))
+
+(define (index-delete! name value #!optional (prefix "%HAS-PROP:"))
+  (let ((idx-name (string-append prefix name)))
+    (redis-srem name value)))
+
+(define (index-exists? name value #!optional (prefix "%HAS-PROP"))
+  (db-result->bool (redis-sismember name value)))
+
+(define (get-index name #!optional (prefix "%HAS-PROP:"))
+  (let ((idx-name (string-append prefix name)))
+    (redis-sismember idx-name)))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
 ) ; END MODULE
