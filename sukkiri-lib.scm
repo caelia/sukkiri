@@ -37,8 +37,8 @@
         (import ports)
         (import srfi-1)
         (import srfi-69)
+        (import sukkiri-db)
 
-        (use redis-client)
         (use srfi-19)
         (use numbers)
         (use mathh)
@@ -513,11 +513,37 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  RESOURCE TYPES  --------------------------------------------------
 
-(define resource-types (make-hash-table))
- 
-; (define-record prop-spec label type has-default? default-value
-               ;required? element-type min-size max-size)
+;;; ------  Interface  -----------------------------------------------------
 
+(define-predicate prop-spec?)
+(define-operation label obj)
+(define-operation type obj)
+(define-operation has-default? obj)
+(define-operation default-value obj)
+(define-operation required? obj)
+(define-operation structure obj)
+(define-operation elt-type obj)
+(define-operation min-size obj)
+(define-operation max-size obj)
+   
+;;; ------  Implementation  ------------------------------------------------
+
+(define (make-prop-spec label type #!key (default '(#f)) (required? #t)
+                        (min-size 0) (max-size #f))
+  (object
+    ((prop-spec? self) #t)
+    ((label self) label)
+    ((type self) type)
+    ((has-default? self) (car default))
+    ((default-value self) (cadr default))
+    ((required? self) required?)
+    ((structure) (and (list? type) (car type)))
+    ((elt-type) (and (list? type) (cadr type)))
+    ((min-size self) min-size)
+    ((max-size self) max-size)))
+
+;;; #### old code ##########################################################
+ 
 (define (make-prop-spec label type #!key (default '(#f)) (required? #t)
                         (element-type #f) (min-size 0) (max-size #f))
   (lambda (msg)
@@ -549,11 +575,6 @@
 (define (register-resource-type type-name prop-specs)
   (hash-table-set! resource-types type-name prop-specs))
 
-;(define-record resource id type data)
-
-;(define (create-resource id type #!optional (data '()))
-;  (make-resource id type (alist->hash-table data)))
-
 (define (xml->register-types)
   #f)
 
@@ -563,25 +584,6 @@
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  PROXY OBJECTS  ---------------------------------------------------
-
-; (define-syntax prop-responder
-;   (ir-macro-transformer
-;     (lambda (expr inj comp)
-;       (let* ((res-id (car expr))
-;              (prop-name (cadr expr))
-;              (prop-type (caddr expr))
-;              (type-def (hash-table-ref prop-types prop-type))
-;              (ts (type-def 'to-string))
-;              (fs (type-def 'from-string))
-;              (v (type-def 'validator)))
-;         `(lambda (arg . args)
-;            (if (null? args)
-;              (,fs (car (redis-hget ,res-id ,prop-name)))
-;              (let* ((new-val (car args))
-;                     (valid? (v new-val)))
-;                (if valid?
-;                  (redis-hset ,res-id ,prop-name (,ts new-val))
-;                  (error "Invalid input!")))))))))
 
 (define proxies (make-hash-table))
 
@@ -691,7 +693,6 @@
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ------------------------------------------------------------------------
-;;; ------  Interface  -----------------------------------------------------
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -699,5 +700,7 @@
 ;;; ------------------------------------------------------------------------
 
 ;;; ========================================================================
+;;; ------  Interface  -----------------------------------------------------
+   
 ;;; ------  Implementation  ------------------------------------------------
 
