@@ -84,6 +84,12 @@
       (current-error-port)
       (lambda () (apply print msgs)))))
 
+(define (db-result->bool rs)
+  (case (car rs)
+    ((0) #f)
+    ((1) #t)
+    (else (eprintf "Result '~A' cannot be converted to a boolean value." rs))))
+
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 

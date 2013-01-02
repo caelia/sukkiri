@@ -75,14 +75,6 @@
 (define (ymdhms->date yr mo dt hr mi #!optional (se 0))
   (make-date 0 se mi hr dt mo yr))
 
-(define (get-redis-list key)
-  (let* ((len (string->number (car (redis-llen key))))
-         (last (number->string (- len 1))))
-    (redis-lrange key "0" last)))
-
-(define (get-redis-set key)
-  (list->set (redis-smembers key)))
-
 (define (db-result->bool rs)
   (case (car rs)
     ((0) #f)
