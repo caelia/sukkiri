@@ -219,6 +219,32 @@
 ;     (lambda (k v)
 ;       (redis-hset id k (prepare-value v)))))
 
+(define (store-hash-value res-id prop-name value)
+  (redis-hset res-id prop-name value))
+
+(define (retrieve-hash-value res-id prop-name convert)
+  (let ((rs (redis-hget res-id prop-name)))
+    (car rs)))
+
+(define store-string store-hash-value)
+
+(define retrieve-string retrieve-hash-value)
+
+(define (store-boolean res-id prop-name value)
+  (store-hash-value
+    res-id prop-name 
+    (case value
+      ((#t) "True")
+      ((#f) "False")
+      (else (eprintf "~A is not a boolean." value)))))
+
+(define (retrieve-boolean res-id prop-name)
+  (let ((raw retrieve-hash-value res-id prop-name))
+    (cond
+      ((string=? raw "True") #t)
+      ((string=? raw "False") #f)
+      (else (eprintf "~A cannot be converted to a boolean value." raw)))))
+
 (define (store-list id lst)
   (for-each
     (lambda (elt) (redis-rpush id elt))
