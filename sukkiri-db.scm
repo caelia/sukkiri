@@ -45,8 +45,8 @@
         ;(use s11n) ; FIXME -- using because date->secstring is not working
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  GLOBAL PARAMETERS  ---------------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --  GLOBAL PARAMETERS  -------------------------------------------------
 
 ;; Set a reasonable default in case someone is using an older version of
 ;;   Redis, one that doesn't support CONFIG GET databases. For those who
@@ -68,12 +68,12 @@
 
 (define *sukkiri-db-debug* (make-parameter #f))
 
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  UTILITY FUNCTIONS  ---------------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --  UTILITY FUNCTIONS  -------------------------------------------------
 
 (define (eprintf fmt . args)
   (error (apply sprintf (cons fmt args))))
@@ -84,12 +84,12 @@
       (current-error-port)
       (lambda () (apply print msgs)))))
 
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; --  AUTOMATIC DB ALLOCATION  ---------------------------------------
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; --  AUTOMATIC DB ALLOCATION  -------------------------------------------
 
 (define (init-dbs #!optional (force #f))
   (let ((db-empty?
@@ -186,12 +186,12 @@
           index))
       #t)))
 
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; ----  GENERIC STORAGE PROTOCOL  ------------------------------------
+;;; ----  GENERIC STORAGE PROTOCOL  ----------------------------------------
 
 (define (generate-resource-id)
   (let ((base-id (redis-incr "%RESOURCE-ID")))
@@ -200,9 +200,6 @@
 (define (resource-id id)
   (sprintf "%RESOURCE:~A" id))
 
-;(define (resource-type id)
-  ;(string->symbol (car (redis-hget (resource-id id) "%TYPE"))))
-
 (define (resource-type id)
   (string->symbol (car (redis-hget id "%TYPE"))))
 
@@ -210,87 +207,12 @@
   (let ((base-id (redis-incr "%ANON-ID")))
     (sprintf "%ANONYMOUS:~X" (car base-id))))
 
-;;; ====================================================================
-;;; --  Storage  -------------------------------------------------------
+;;; ========================================================================
+;;; --  Conversion  --------------------------------------------------------
 
-; (define (store-hash-table id ht)
-;   (hash-table-walk
-;     ht
-;     (lambda (k v)
-;       (redis-hset id k (prepare-value v)))))
+(define char->string string)
 
-(define (store-hash-value res-id prop-name value)
-  (redis-hset res-id prop-name value))
-
-(define (retrieve-hash-value res-id prop-name convert)
-  (let ((rs (redis-hget res-id prop-name)))
-    (car rs)))
-
-(define store-string store-hash-value)
-
-(define retrieve-string retrieve-hash-value)
-
-(define (store-boolean res-id prop-name value)
-  (store-hash-value
-    res-id prop-name 
-    (case value
-      ((#t) "True")
-      ((#f) "False")
-      (else (eprintf "~A is not a boolean." value)))))
-
-(define (retrieve-boolean res-id prop-name)
-  (let ((raw retrieve-hash-value res-id prop-name))
-    (cond
-      ((string=? raw "True") #t)
-      ((string=? raw "False") #f)
-      (else (eprintf "~A cannot be converted to a boolean value." raw)))))
-
-(define (store-list id lst)
-  (for-each
-    (lambda (elt) (redis-rpush id elt))
-    lst))
-
-(define (store-set id set)
-  (set-for-each
-    (lambda (elt) (redis-sadd id elt))
-    set))
-
-(define (store-anonymous-object f obj)
-  (let* ((id (generate-anon-id))
-         (stored (f id obj)))
-    (and stored id)))
-
-; (define (store-anonymous-hash obj)
-  ; (store-anonymous-object obj store-hash-table))
-
-(define (store-anonymous-list obj)
-  (store-anonymous-object store-list obj))
-
-(define (store-anonymous-set obj)
-  (store-anonymous-object store-set obj))
-
-; ;;; ====================================================================
-; ;;; --  Retrieval  -----------------------------------------------------
-
-(define (retrieve-anonymous-list id)
-  (let ((len (car (redis-llen id))))
-    (redis-lrange id "0" (number->string (- len 1)))))
-
-(define (retrieve-anonymous-set id)
-  (list->set (redis-smembers id)))
-
-; (define (retrieve-anonymous-hash id)
-;   (let ((h (make-hash-table))
-;         (fields (redis-hkeys id)))
-;     (for-each
-;       (lambda (fld)
-;         (let ((raw-val (car (redis-hget id fld))))
-;           (hash-table-set! h fld (dbstring->any raw-val))))
-;       fields)
-;     h))
-  
-;;; ====================================================================
-;;; --  Conversion  ----------------------------------------------------
+(define (string->char s) (string-ref s 0))
 
 (define (boolean->string b)
   (if b "T" "F"))
@@ -301,19 +223,117 @@
     ((string=? s "F") #f)
     (else (eprintf "String '~A' does not represent a boolean." s))))
 
-(define date->secstring
-  (lambda (d)
-  (with-output-to-string
-    (lambda ()
-      (serialize d)))))
-  ;(o number->string inexact->exact time->seconds date->time))
+(define *converters*
+  (make-parameter
+    '((string identity identity) (symbol symbol->string string->symbol)
+      (char char->string string->char) (boolean boolean->string string->boolean)
+      (integer number->string string->number) (float number->string string->number)
+      (number number->string string->number))))
 
-(define secstring->date
-  (lambda (s)
-    (with-input-from-string s
-      (lambda ()
-        (deserialize)))))
-  ;(o seconds->date inexact->exact string->number))
+(define (converter-from type)
+  (car (alist-ref type (*converters*))))
+
+(define (converter-to type)
+  (cadr (alist-ref type (*converters*))))
+
+(define (register-converters type from to)
+  (*converters* (cons (list type from to) (*converters*))))
+
+;;; ========================================================================
+;;; --  Storage  -----------------------------------------------------------
+
+(define (storage-func convert)
+  (lambda (res-id prop-name value)
+    (redis-hset res-id prop-name (convert value))))
+
+(define (retrieval-func convert)
+  (lambda (res-id prop-name)
+    (let* ((rs (redis-hget res-id prop-name))
+           (raw (car rs)))
+      (convert raw))))
+
+(define store-string (storage-func identity))
+
+(define store-symbol (storage-func symbol->string))
+
+(define store-char (storage-func char->string))
+
+(define store-boolean (storage-func boolean->string))
+
+(define store-integer (storage-func number->string))
+
+(define store-float (storage-func number->string))
+
+(define store-number store-float)
+
+(define (store-list id lst elt-type)
+  (let ((conv (converter-from elt-type)))
+    (for-each
+      (lambda (elt) (redis-rpush id (conv elt)))
+      lst))
+  #t)
+
+(define (store-set id set elt-type)
+  (let ((conv (converter-from elt-type)))
+    (for-each
+      (lambda (elt) (redis-sadd id (conv elt)))
+      (set->list set)))
+  #t)
+
+(define (store-anonymous-object proc)
+  (let* ((id (generate-anon-id))
+         (stored (proc id)))
+    (and stored id)))
+
+(define (store-anonymous-list lst #!optional (elt-type 'string))
+  (store-anonymous-object
+    (lambda (id) (store-list id lst elt-type))))
+
+(define (store-anonymous-set set #!optional (elt-type 'string))
+  (store-anonymous-object
+    (lambda (id) (store-set id set elt-type))))
+
+(define (add-to-list id elt #!optional (type 'string))
+  (let ((conv (converter-from type)))
+    (redis-rpush id (conv elt))))
+
+(define (add-to-set id elt #!optional (type 'string))
+  (let ((conv (converter-from type)))
+    (redis-sadd id (conv elt))))
+
+;;; ========================================================================
+;;; --  Retrieval  ---------------------------------------------------------
+
+(define (retrieval-func convert)
+  (lambda (res-id prop-name)
+    (let* ((rs (redis-hget res-id prop-name))
+           (raw (car rs)))
+      (convert raw))))
+
+(define retrieve-string (retrieval-func identity))
+
+(define retrieve-symbol (retrieval-func string->symbol))
+
+(define retrieve-char (retrieval-func char->string))
+
+(define retrieve-boolean (retrieval-func bool->string))
+
+(define retrieve-integer (retrieval-func string->number))
+
+(define retrieve-float (retrieval-func string->number))
+
+(define retrieve-number retrieve-float)
+
+(define (retrieve-list id #!optional (elt-type 'string))
+  (let* ((conv (converter-to elt-type))
+         (len (car (redis-llen id)))
+         (raw (redis-lrange id "0" (number->string (- len 1)))))
+    (map conv raw)))
+
+(define (retrieve-set id #!optional (elt-type 'string))
+  (let ((conv (converter-to elt-type))
+        (raw (redis-smembers id)))
+    (list->set (map conv raw))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
