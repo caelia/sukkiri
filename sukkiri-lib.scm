@@ -75,12 +75,6 @@
 (define (ymdhms->date yr mo dt hr mi #!optional (se 0))
   (make-date 0 se mi hr dt mo yr))
 
-(define (db-result->bool rs)
-  (case (car rs)
-    ((0) #f)
-    ((1) #t)
-    (else (eprintf "Result '~A' cannot be converted to a boolean value." rs))))
-
 (define (set-map proc input-set)
   (let ((output-set (make-empty-set)))
     (set-for-each
