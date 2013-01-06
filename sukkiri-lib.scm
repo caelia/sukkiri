@@ -90,46 +90,31 @@
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; ----  PROPERTIES  ------------------------------------------------------
+;;; ----  PROPERTY TYPES  --------------------------------------------------
 
 ;;; ========================================================================
 ;;; ----  Basic property type  ---------------------------------------------
 
 ;;; ------  Interface  -----------------------------------------------------
 
-(define-predicate property?) 
-(define-operation (prop-type obj))
+(define-predicate proptype?) 
 (define-operation (base-type obj))
-(define-operation (get-val obj))
-(define-operation (set-val! obj new-val))
+(define-operation (structure obj))
 (define-operation (store obj new-val))
 (define-operation (retrieve obj))
+(define-operation (delete obj))
 
 ;;; ------  Implementation  ------------------------------------------------
 
-;;; make-property should not be used directly in application code. It is
-;;;   intended to be a basis for defining more specific types in extension
-;;;   code.
-(define (make-property ptype base res-id prop-name #!key (init-val #f)
-                       (valid? (lambda (_) #f)) (to-string (lambda (x) x))
-                       (from-string (lambda (s) s)))
-  (let ((value init-val)
-        (db-result #f))
-    (object
-      ((property? self) #t)
-      ((prop-type self) ptype)
-      ((base-type self) base)
-      ((get-val self) value)
-      ((set-val! self new-val)
-       (if (valid? new-val)
-         (set! value new-val)
-         (error (sprintf "Invalid input for ~A!" ptype))))
-      ((store self new-val) (redis-hset res-id prop-name (to-string new-val)))
-      ((retrieve self)
-       (let ((rs (redis-hget res-id prop-name)))
-         (to-string (car rs))))
-      (else
-        (error (sprintf "Unrecognized message."))))))
+;;; FIXME: this is not right--still need to figure out how we interface w/
+;;;   the DB module
+(define (make-proptype base valid? ->dbformat dbformat-> delete)
+  (object
+    ((proptype? self) #t)
+    ((base-type self) base)
+    ((structure self) #f)
+    (else
+      (error (sprintf "Unrecognized message."))))))
 
 
 ;;; ========================================================================
