@@ -220,13 +220,14 @@
 
 (define (string->char s) (string-ref s 0))
 
+;; We are using our own version of booleans to remove the ambiguity from #t & #f.
 (define (boolean->string b)
-  (if b "T" "F"))
+  (symbol->string b))
 
 (define (string->boolean s)
   (cond
-    ((string=? s "T") #t)
-    ((string=? s "F") #f)
+    ((string=? s "%T") %T:)
+    ((string=? s "%F") %F:)
     (else (eprintf "String '~A' does not represent a boolean." s))))
 
 (define *converters*

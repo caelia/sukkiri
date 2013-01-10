@@ -108,78 +108,26 @@
 
 ;;; FIXME: this is not right--still need to figure out how we interface w/
 ;;;   the DB module
-(define (make-proptype base valid? ->dbformat dbformat->)
-  (object
-    ((proptype? self) #t) 
-    ((base-type self) base)
-    ((structure self) #f)
-    ((storage-proc self)
-     (lambda (res-id prop-name new-val)
-       (db:store-property res-id prop-name (->dbformat new-val))))
-    ((retrieval-proc self)
-     (lambda (res-id prop-name)
-       (dbformat-> (db:retrieve-property res-id prop-name))))
-    ((deletion-proc self)
-     (lambda (res-id prop-name)
-       (db:delete-property res-id prop-name)))))
-
-;;; ========================================================================
-;;; ----  Property Type Registry  ------------------------------------------
-
-(define proptypes (make-hash-table))
-
-(define (register-proptype name ptype-obj)
-  (hash-table-set! proptypes name ptype-obj))
-
-(define (create-proptype name base valid? ->dbformat dbformat-> #!optional (store #t))
-  (let ((ptype-obj (make-proptype base valid? ->dbformat dbformat->)))
-    (when store (db:store-proptype name ptype-obj))
-    (register-proptype name ptype-obj)))
-
-(define (load-proptype name)
-  (let ((ptype-obj (db:retrieve-proptype name)))
-    (register-proptype name ptype-obj)))
-
-(define (load-proptypes)
-  (let ((ptnames (db:list-proptypes)))
-    (for-each
-      (lambda (ptn) (load-proptype ptn))
-      (ptnames))))
-
-(define (get-proptype name)
-  (hash-table-ref proptypes name))
-
-;;; ========================================================================
-;;; ----  Basic Property Object  -------------------------------------------
-
-;;; ------  Interface  -----------------------------------------------------
-
-(define-predicate property?)
-(define-operation (update obj new-val))
-(define-operation (reset obj))
-(define-operation (get obj))
-(define-operation (delete obj))
-
-;;; ------  Implementation  ------------------------------------------------
-
-(define (make-property res-id prop-name ptype-name #!optional (init %UNDEFINED:)
-                       #!key (required #t) (default %UNDEFINED:))
-  (let ((prop-type (lambda () (get-proptype ptype-name))))
-    (if (eqv? init %UNDEFINED:)
-       (db:store-undef res-id prop-name)
-       ((storage-proc (prop-type)) res-id prop-name init))
+(define (make-proptype base valid? #!optional ->dbformat dbformat->)
+  (let ((->dbformat
+          (or ->dbformat (db:converter-from base)))
+        (dbformat->
+          (or dbformat-> (db:converter-to base))))
     (object
-      ((property? self) #t)
-      ((update self new-val)
-       ((storage-proc (prop-type)) res-id prop-name new-val))
-      ((reset self)
-       (unless (eqv? default %UNDEFINED:)
-         ((storage-proc (prop-type)) res-id prop-name default)))
-      ((get self)
-       ((retrieval-proc (prop-type)) res-id prop-name))
-      ((delete self)
-       ((deletion-proc (prop-type)) res-id prop-name)))))
-
+      ((proptype? self) #t) 
+      ((base-type self) base)
+      ((structure self) #f)
+      ((storage-proc self)
+       (lambda (res-id prop-name new-val)
+         (if (valid? new-val)
+           (db:store-property res-id prop-name (->dbformat new-val))
+           (eprintf "~A is not a legal value for ~A:~A" new-val res-id prop-name))))
+      ((retrieval-proc self)
+       (lambda (res-id prop-name)
+         (dbformat-> (db:retrieve-property res-id prop-name))))
+      ((deletion-proc self)
+       (lambda (res-id prop-name)
+         (db:delete-property res-id prop-name))))))
 
 ;;; ========================================================================
 ;;; ----  String Type  -----------------------------------------------------
@@ -375,6 +323,148 @@
 ;;; ------  Implementation  ------------------------------------------------
 
 
+;;; ========================================================================
+;;; ----  Property Type Registry  ------------------------------------------
+
+(define proptypes
+  (alist->hash-table
+    (list
+      (cons "string" (make-proptype 'string string?))
+      (cons "char" (make-proptype 'char char?))
+      (cons "symbol" (make-proptype 'symbol symbol?))
+      (cons "boolean" (make-proptype 'boolean boolean?))
+      (cons "integer" (make-proptype 'integer fixnum?))
+      (cons "float" (make-proptype 'float flonum?))
+      (cons "number" (make-proptype 'number number?))
+      (cons "iref" (make-proptype 'string string?)))))
+
+(define (register-proptype name ptype-obj)
+  (hash-table-set! proptypes name ptype-obj))
+
+(define (create-proptype name base valid? ->dbformat dbformat-> #!optional (store #t))
+  (let ((ptype-obj (make-proptype base valid? ->dbformat dbformat->)))
+    (when store (db:store-proptype name ptype-obj))
+    (register-proptype name ptype-obj)))
+
+(define (load-proptype name)
+  (let ((ptype-obj (db:retrieve-proptype name)))
+    (register-proptype name ptype-obj)))
+
+(define (load-proptypes)
+  (let ((ptnames (db:list-proptypes)))
+    (for-each
+      (lambda (ptn) (load-proptype ptn))
+      (ptnames))))
+
+(define (get-proptype name)
+  (hash-table-ref proptypes name))
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  PROPERTIES  ------------------------------------------------------
+
+;;; ----  Basic Property Object  -------------------------------------------
+
+;;; ------  Interface  -----------------------------------------------------
+
+(define-predicate property?)
+(define-operation (update obj new-val))
+(define-operation (reset obj))
+(define-operation (get obj))
+(define-operation (delete obj))
+
+;;; ------  Implementation  ------------------------------------------------
+
+(define (make-property res-id prop-name ptype-name #!optional (init %UNDEFINED:)
+                       #!key (default %UNDEFINED:) (required #t))
+  (let ((prop-type (lambda () (get-proptype ptype-name))))
+    (if (eqv? init %UNDEFINED:)
+       (db:store-undef res-id prop-name)
+       ((storage-proc (prop-type)) res-id prop-name init))
+    (object
+      ((property? self) #t)
+      ((update self new-val)
+       ((storage-proc (prop-type)) res-id prop-name new-val))
+      ((reset self)
+       (unless (eqv? default %UNDEFINED:)
+         ((storage-proc (prop-type)) res-id prop-name default)))
+      ((get self)
+       ((retrieval-proc (prop-type)) res-id prop-name))
+      ((delete self)
+       ((deletion-proc (prop-type)) res-id prop-name)))))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  RESOURCE TYPES  --------------------------------------------------
+
+;;; ========================================================================
+;;; ----  RESOURCE TYPE REGISTRY  ------------------------------------------
+
+(define (resource-types (make-hash-table))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  RESOURCES  -------------------------------------------------------
+
+;;; ------  Interface  -----------------------------------------------------
+   
+(define-predicate resource?)
+(define-operation (get obj prop-name))
+(define-operation (set! obj prop-name new-val))
+(define-operation (unset! obj prop-name))
+(define-operation (delete! obj))
+
+;;; ------  Implementation  ------------------------------------------------
+
+(define (make-resource id type #!optional (init-values '()) (schema #f)))
+  (when (and (eqv? type %AD-HOC:) (not schema))
+    (error "You must supply a schema for an ad-hoc resource."))
+  (let ((schema (or schema (get-schema type))))
+    (for-each
+      (lambda (prop-spec)
+        (let ((prop-name
+                (car prop-spec))
+              (prop-type
+                (cadr prop-spec))
+              (default 
+                (if (null? (cddr prop-spec))
+                  %UNDEFINED:
+                  (caddr prop-spec)))
+              (required
+                (or (null? (cddr prop-spec))
+                    (null? (cdddr prop-spec))
+                    (cadddr prop-spec))))
+          (object
+            ((get) #t)
+            ((set!) #t)
+            ((unset!) #t)
+            ((delete! #t))))))))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  ADMIN & INITIALIZATION  ------------------------------------------
+
+(define (initialize app-name #!optional (redis-session #t))
+  (when redis-session
+    (open-db-session app-name))
+  (load-proptypes)
+  (load-resource-types))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 (define-syntax make-pt-primitive
   (syntax-rules ()
     ((_ type-sym to from val)
