@@ -38,7 +38,9 @@
         (import srfi-1)
         (import srfi-69)
 
-        (import (prefix sukkiri-utils util:))
+        ;(import (prefix sukkiri-utils util:))
+        ;(import sukkiri-utils)
+        (reexport sukkiri-utils)
         (import (prefix sukkiri-db db:))
 
         (use numbers)
@@ -49,25 +51,7 @@
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; ----  GLOBAL PARAMETERS  -----------------------------------------------
-
-(define *sukkiri-debug* (make-parameter #f))
-
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-
-
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  UTILITY FUNCTIONS  -----------------------------------------------
-
-(define (eprintf fmt . args)
-  (error (apply sprintf (cons fmt args))))
-
-(define (debug-msg . msgs)
-  (when (*sukkiri-debug*)
-    (with-output-to-port
-      (current-error-port)
-      (lambda () (apply print msgs)))))
 
 (define (set-map proc input-set)
   (let ((output-set (make-empty-set)))
@@ -298,30 +282,40 @@
 ;;; ------  Interface  -----------------------------------------------------
 
 (define-predicate property?)
-(define-operation (update obj new-val))
-(define-operation (reset obj))
-(define-operation (get obj))
-(define-operation (delete obj))
+(define-predicate list-property?)
+(define-predicate set-property?)
+(define-operation (p-update! obj new-val))
+(define-operation (p-reset! obj))
+(define-operation (p-get obj))
+(define-operation (p-delete! obj))
 
 ;;; ------  Implementation  ------------------------------------------------
 
-(define (make-property res-id prop-name ptype-name #!optional (init %UNDEFINED:)
-                       #!key (default %UNDEFINED:) (required #t))
-  (let ((prop-type (lambda () (get-proptype ptype-name))))
-    (if (eqv? init %UNDEFINED:)
-       (db:store-undef res-id prop-name)
-       ((storage-proc (prop-type)) res-id prop-name init))
+(define (initialize-property (res-id prop-name init default store))
+  (let ((init (or init default)))
+    (if init
+      (store res-id prop-name init)
+      (db:store-undef res-id prop-name))))
+
+(define (make-property res-id prop-name ptype-name #!optional (init #f)
+                       #!key (default #f) (required #t) (initialize #t))
+  (let ((prop-type (get-proptype ptype-name)))
+    (when initialize
+      (initialize-property res-id prop-name init default (storage-proc prop-type)))
     (object
-      ((property? self) #t)
-      ((update self new-val)
+      ((p-update! self new-val)
        ((storage-proc (prop-type)) res-id prop-name new-val))
-      ((reset self)
-       (unless (eqv? default %UNDEFINED:)
+      ((p-reset! self)
+       (when default
          ((storage-proc (prop-type)) res-id prop-name default)))
-      ((get self)
+      ((p-get self)
        ((retrieval-proc (prop-type)) res-id prop-name))
-      ((delete self)
+      ((p-delete! self)
        ((deletion-proc (prop-type)) res-id prop-name)))))
+
+(define (make-list-property res-id prop-name ptype-name #!optional (init #f)
+                            #!key (default #f) (min-occurs 1) (max-occurs '*))
+                            
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -338,10 +332,9 @@
 (define (register-schema res-type schema)
   (hash-table-set! schemata res-type schema))
 
-(define (create-schema res-type specs)
-  (let ((schema (make-schema res-type specs)))
-    (db:store-schema res-type schema)
-    (register-schema res-type schema)))
+(define (create-schema res-type schema)
+  (db:store-schema res-type schema)
+  (register-schema res-type schema))
 
 (define (load-schema res-type)
   (let ((schema (db:retrieve-schema res-type)))
@@ -366,10 +359,10 @@
 ;;; ------  Interface  -----------------------------------------------------
    
 (define-predicate resource?)
-(define-operation (get obj prop-name))
-(define-operation (set! obj prop-name new-val))
-(define-operation (unset! obj prop-name))
-(define-operation (delete! obj))
+(define-operation (r-get obj prop-name))
+(define-operation (r-set! obj prop-name new-val))
+(define-operation (r-unset! obj prop-name))
+(define-operation (r-delete! obj))
 
 ;;; ------  Implementation  ------------------------------------------------
 
@@ -379,23 +372,20 @@
   (let ((schema (or schema (get-schema type))))
     (for-each
       (lambda (prop-spec)
-        (let* ((prop-name
-                 (car prop-spec))
-               (prop-type
-                 (cadr prop-spec))
-              (default
-                (if (null? (cddr prop-spec))
-                  %UNDEFINED:
-                  (caddr prop-spec)))
-              (required
-                (or (null? (cddr prop-spec))
-                    (null? (cdddr prop-spec))
-                    (cadddr prop-spec))))
+        (let* ((prop-name (car prop-spec))
+               (prop-type (cadr prop-spec))
+               (params (cddr prop-spec))
+               (default (alist-ref 'default params))
+               (min-occurs (or (alist-ref 'min-occurs) 1))
+               (max-occurs (or (alist-ref 'max-occurs) 1))
+               (structure (and (> max-occurs 1) (alist-ref 'structure params)))
+               (init-val (alist-ref prop-name init-values)))
+          (
           (object
-            ((get) #t)
-            ((set!) #t)
-            ((unset!) #t)
-            ((delete! #t))))))))
+            ((r-get) #t)
+            ((r-set!) #t)
+            ((r-unset!) #t)
+            ((r-delete! #t))))))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -408,7 +398,7 @@
   (when redis-session
     (open-db-session app-name))
   (load-proptypes)
-  (load-resource-types))
+  (load-schemas))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 

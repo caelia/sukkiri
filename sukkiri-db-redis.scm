@@ -1,4 +1,4 @@
-;;; sukkiri-db.scm -- Redis interface layer for Sukkiri
+;;; sukkiri-db-redis.scm -- Redis interface layer for Sukkiri
 ;;;   Copyright © 2012 by Matt Gushee <matt@gushee.net>
 ;;;   This program is open-source software, released under the
 ;;;   BSD License. See the accompanying LICENSE file for details.
@@ -14,7 +14,7 @@
 ;;; includes the 'sukkiri-admin' program, which provides a command-line
 ;;; interface to the first two of these procedures.
 
-(module sukkiri-db
+(module sukkiri-db-redis
 ;        *
         (*total-dbs*
          *default-host*
@@ -38,7 +38,7 @@
 
         (import sukkiri-utils)
 
-        (include "sukkiri-db-redis.scm")
+        (use redis-client)
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
