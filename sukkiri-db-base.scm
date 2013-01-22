@@ -1,21 +1,10 @@
-;;; sukkiri-db.scm -- Redis interface layer for Sukkiri
+;;; sukkiri-db-base.scm -- Base object definitions for Sukkiri database layer
 ;;;   Copyright © 2012 by Matt Gushee <matt@gushee.net>
 ;;;   This program is open-source software, released under the
 ;;;   BSD License. See the accompanying LICENSE file for details.
 ;;;
-;;; DB Administration & Sessions
-;;; ============================
-;;; Although you may use Sukkiri to store and query data with a simple
-;;; connection to any Redis server (i.e., using REDIS-CONNECT from
-;;; the redis-client extension, you may wish to segregate your data
-;;; from other applications that may be using the same server. To
-;;; facilitate this process, this library provides the INIT-SUKKIRI-DBS,
-;;; START-SUKKIRI-SERVER, and OPEN-SUKKIRI-DB procedures. The egg also
-;;; includes the 'sukkiri-admin' program, which provides a command-line
-;;; interface to the first two of these procedures.
 
 (module sukkiri-db
-;        *
         (*total-dbs*
          *default-host*
          *default-port*
@@ -38,8 +27,10 @@
 
         (import sukkiri-utils)
 
-        (include "sukkiri-db-redis.scm")
+        (use coops)
 
+
+(define-class <database>)
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; --  GLOBAL PARAMETERS  -------------------------------------------------

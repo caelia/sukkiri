@@ -184,19 +184,24 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  GENERIC STORAGE PROTOCOL  ----------------------------------------
 
-(define (generate-resource-id)
-  (let ((base-id (redis-incr "%RESOURCE-ID")))
-    (sprintf "%RESOURCE:~X" (car base-id))))
+(generate-resource-id
+  (lambda ()
+    (let ((base-id (redis-incr "%RESOURCE-ID")))
+      (sprintf "%RESOURCE:~X" (car base-id)))))
 
-(define (resource-id id)
-  (sprintf "%RESOURCE:~A" id))
+(resource-id
+  (lambda (id)
+    (sprintf "%RESOURCE:~A" id)))
 
-(define (resource-type id)
-  (string->symbol (car (redis-hget id "%TYPE"))))
+(resource-type
+  (lambda (id)
+    id
+    (string->symbol (car (redis-hget id "%TYPE")))))
 
-(define (generate-anon-id)
-  (let ((base-id (redis-incr "%ANON-ID")))
-    (sprintf "%ANONYMOUS:~X" (car base-id))))
+(generate-anon-id
+  (lambda ()
+    (let ((base-id (redis-incr "%ANON-ID")))
+      (sprintf "%ANONYMOUS:~X" (car base-id)))))
 
 ;;; ========================================================================
 ;;; --  Conversion  --------------------------------------------------------
@@ -215,62 +220,34 @@
     ((string=? s "%F") %F:)
     (else (eprintf "String '~A' does not represent a boolean." s))))
 
-(define *converters*
-  (make-parameter
-    '((string identity identity) (symbol symbol->string string->symbol)
-      (char char->string string->char) (boolean boolean->string string->boolean)
-      (integer number->string string->number) (float number->string string->number)
-      (number number->string string->number))))
-
-(define (converter-from type)
-  (car (alist-ref type (*converters*))))
-
-(define (converter-to type)
-  (cadr (alist-ref type (*converters*))))
-
-(define (register-converters type from to)
-  (*converters* (cons (list type from to) (*converters*))))
+(*converters*
+  '((string identity identity) (symbol symbol->string string->symbol)
+    (char char->string string->char) (boolean boolean->string string->boolean)
+    (integer number->string string->number) (float number->string string->number)
+    (number number->string string->number)))
 
 ;;; ========================================================================
 ;;; --  Storage  -----------------------------------------------------------
 
-(define (storage-func convert)
+(store-property
   (lambda (res-id prop-name value)
-    (redis-hset res-id prop-name (convert value))))
+    (redis-hset res-id prop-name value)))
 
-(define (retrieval-func convert)
-  (lambda (res-id prop-name)
-    (let* ((rs (redis-hget res-id prop-name))
-           (raw (car rs)))
-      (convert raw))))
+(store-list
+  (lambda (id lst elt-type)
+    (let ((conv (converter-from elt-type)))
+      (for-each
+        (lambda (elt) (redis-rpush id (conv elt)))
+        lst))
+    #t))
 
-(define store-string (storage-func identity))
-
-(define store-symbol (storage-func symbol->string))
-
-(define store-char (storage-func char->string))
-
-(define store-boolean (storage-func boolean->string))
-
-(define store-integer (storage-func number->string))
-
-(define store-float (storage-func number->string))
-
-(define store-number store-float)
-
-(define (store-list id lst elt-type)
-  (let ((conv (converter-from elt-type)))
-    (for-each
-      (lambda (elt) (redis-rpush id (conv elt)))
-      lst))
-  #t)
-
-(define (store-set id set elt-type)
-  (let ((conv (converter-from elt-type)))
-    (for-each
-      (lambda (elt) (redis-sadd id (conv elt)))
-      (set->list set)))
-  #t)
+(store-set
+  (lambda (id set elt-type)
+    (let ((conv (converter-from elt-type)))
+      (for-each
+        (lambda (elt) (redis-sadd id (conv elt)))
+        (set->list set)))
+    #t))
 
 (define (store-anonymous-object proc)
   (let* ((id (generate-anon-id))
@@ -285,47 +262,36 @@
   (store-anonymous-object
     (lambda (id) (store-set id set elt-type))))
 
-(define (add-to-list id elt #!optional (type 'string))
-  (let ((conv (converter-from type)))
-    (redis-rpush id (conv elt))))
+(add-to-list
+  (lambda (id elt #!optional (type 'string))
+    (let ((conv (converter-from type)))
+      (redis-rpush id (conv elt)))))
 
-(define (add-to-set id elt #!optional (type 'string))
-  (let ((conv (converter-from type)))
-    (redis-sadd id (conv elt))))
+(add-to-set
+  (lambda (id elt #!optional (type 'string))
+    (let ((conv (converter-from type)))
+      (redis-sadd id (conv elt)))))
 
 ;;; ========================================================================
 ;;; --  Retrieval  ---------------------------------------------------------
 
-(define (retrieval-func convert)
+(retrieve-property
   (lambda (res-id prop-name)
-    (let* ((rs (redis-hget res-id prop-name))
-           (raw (car rs)))
-      (convert raw))))
+    (let ((rs (redis-hget res-id prop-name)))
+      (car rs))))
 
-(define retrieve-string (retrieval-func identity))
+(retrieve-list
+  (lambda (id #!optional (elt-type 'string))
+    (let* ((conv (converter-to elt-type))
+           (len (car (redis-llen id)))
+           (raw (redis-lrange id "0" (number->string (- len 1)))))
+      (map conv raw))))
 
-(define retrieve-symbol (retrieval-func string->symbol))
-
-(define retrieve-char (retrieval-func char->string))
-
-(define retrieve-boolean (retrieval-func bool->string))
-
-(define retrieve-integer (retrieval-func string->number))
-
-(define retrieve-float (retrieval-func string->number))
-
-(define retrieve-number retrieve-float)
-
-(define (retrieve-list id #!optional (elt-type 'string))
-  (let* ((conv (converter-to elt-type))
-         (len (car (redis-llen id)))
-         (raw (redis-lrange id "0" (number->string (- len 1)))))
-    (map conv raw)))
-
-(define (retrieve-set id #!optional (elt-type 'string))
-  (let ((conv (converter-to elt-type))
-        (raw (redis-smembers id)))
-    (list->set (map conv raw))))
+(retrieve-set
+  (lambda (id #!optional (elt-type 'string))
+    (let ((conv (converter-to elt-type))
+          (raw (redis-smembers id)))
+      (list->set (map conv raw)))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
