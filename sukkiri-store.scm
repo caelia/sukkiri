@@ -221,8 +221,8 @@
     mem_type INTEGER REFERENCES types(id)
   );")
 
-(define create-triple-table-query
-  "CREATE TABLE triples (
+(define create-statement-table-query
+  "CREATE TABLE statements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     s  TEXT NOT NULL,
     st  INTEGER REFERENCES types(id) NOT NULL,
@@ -253,7 +253,7 @@
         ,create-types-table-query
         ,create-union-type-table-query
         ,create-struct-members-table-query
-        ,create-triple-table-query))
+        ,create-statement-table-query))
     (for-each
       (lambda (qlist) (for-each qx qlist))
       `(,populate-primitive-table-queries
@@ -264,7 +264,6 @@
     (close-database db)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
@@ -679,7 +678,6 @@
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
-
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  VALIDATION FUNCTIONS  --------------------------------------------
 
@@ -779,6 +777,48 @@
             (else (eprintf "Unknown datatype: '~A'" type))))))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO  
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  STATEMENT MANIPULATION  ------------------------------------------
+
+;;; ------  Queries  -------------------------------------------------------
+
+(define exists-s-query
+  "EXISTS (SELECT id FROM statements WHERE s = ?);") 
+
+(define exists-p-query
+  "EXISTS (SELECT id FROM statements WHERE p = ?);") 
+
+(define exists-o-query
+  "EXISTS (SELECT id FROM statements WHERE o = ?);") 
+
+(define exists-sp-query
+  "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ?);") 
+
+(define exists-so-query
+  "EXISTS (SELECT id FROM statements WHERE s = ? AND o = ?);") 
+
+(define exists-po-query
+  "EXISTS (SELECT id FROM statements WHERE p = ? AND o = ?);") 
+
+(define exists-spo-query
+  "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ? AND o = ?);") 
+
+(define get-statements-by-s-query
+  "SELECT s, p, o FROM statements WHERE s = ?;")
+
+(define get-statements-by-p-query
+  "SELECT s, p, o FROM statements WHERE p = ?;")
+
+(define get-statements-by-o-query
+  "SELECT s, p, o FROM statements WHERE o = ?;")
+
+;;; ========================================================================
+;;; ------  Functions  -----------------------------------------------------
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
 
 ) ; END MODULE
 
