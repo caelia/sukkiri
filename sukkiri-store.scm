@@ -3,7 +3,7 @@
 ;;;   This program is open-source software, released under the GNU General
 ;;;   Public License v3. See the accompanying LICENSE file for details.
 
-(module rel8r-store
+(module sukkiri-store
         *
         (import scheme chicken)
         (import extras)
@@ -32,7 +32,7 @@
   (cond
     ((string=? dbval "0") #f)
     ((string=? dbval "1") #t)
-    (else (eprintf ("'~A' is not a boolean value")))))
+    (else (eprintf "'~A' is not a boolean value" dbval))))
 
 (define (db->datetime dbval)
   (with-input-from-string dbval
@@ -738,7 +738,7 @@
     ((zoma) #t)
     (else (eprintf "Unrecognized value for cardinality: ~A" card))))
 
-(define (validate-struct-member memspec value)
+(define (validate-struct-member db/file memspec value)
   (let* ((rel-name (car memspec))
          (cardinality (cadr memspec))
          (mem-type (caddr memspec))
@@ -748,17 +748,17 @@
                (equal? (alist-ref 'rel-name item) rel-name))
              value)))
     (and (validate-struct-member-cardinality cardinality members)
-         (every (lambda (mem) (validate mem-type mem)) members))))
+         (every (lambda (mem) (validate db/file mem-type mem)) members))))
 
 (define (no-unspecified-members? memspecs value)
   (let ((known-rel-names (map car memspecs)))
-    (every (lambda (mem) (member (alist-ref 'rel-name mem) known-rel-names)))))
+    (every (lambda (mem) (member (alist-ref 'rel-name mem) known-rel-names)) value)))
 
 (define (validate-struct-type db/file type value)
   (let* ((typespec (get-struct-type db/file type))
          (extensible (car typespec))
          (memspecs (cadr typespec)))
-    (and (every (lambda (ms) (validate-struct-member ms value)) memspecs)
+    (and (every (lambda (ms) (validate-struct-member db/file ms value)) memspecs)
          (or extensible
              (no-unspecified-members? memspecs value)))))
               
