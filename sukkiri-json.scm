@@ -7,6 +7,7 @@
 ;;;
 ;;; { "%TYPE": "project",
 ;;;   "%ID": "breed-mutant-seahorses",
+;;;   "%LABEL": "title",
 ;;;   "title": "Breed Mutant Seahorses",
 ;;;   "deadline": "2014-03-28T17:00:00",
 ;;;   "contact": "%NREF%jane-morgan",
@@ -14,11 +15,13 @@
 ;;;
 ;;; { "%TYPE": "action",
 ;;;   "%ID": "build-tank",
+;;;   "%LABEL": "content",
 ;;;   "content": "Build tank for seahorses",
 ;;;   "context": ["lab"] }
 ;;;
 ;;; { "%TYPE": "person",
 ;;;   "%ID": "jane-morgan",
+;;;   "%LABEL": "given-name & surname",
 ;;;   "given-name": "Jane",
 ;;;   "surname": "Morgan",
 ;;;   "email": ["%NREF%jane-morgan-work-email"] }
