@@ -34,8 +34,9 @@
 (module sukkiri-json
         *
         (import scheme chicken)
-        (use sukkiri-base)
-        (use medea)
+        (use (prefix sukkiri-base b:))
+        (use (prefix sukkiri-store s:))
+        (use (prefix medea m:))
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  INPUT FROM JSON  -------------------------------------------------
