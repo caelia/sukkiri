@@ -104,6 +104,7 @@
     "INSERT INTO primitives (name) VALUES ('date');"
     "INSERT INTO primitives (name) VALUES ('time');"
     "INSERT INTO primitives (name) VALUES ('datetime');"
+    "INSERT INTO primitives (name) VALUES ('period');"
     "INSERT INTO primitives (name) VALUES ('nref');"
     "INSERT INTO primitives (name) VALUES ('rref');"
     "INSERT INTO primitives (name) VALUES ('xref');"))
