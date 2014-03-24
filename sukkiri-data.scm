@@ -129,25 +129,53 @@
       vocab-types)))
 
 ;;; ========================================================================
-;;; ------------------------------------------------------------------------
+;;; ----  Struct Types  ----------------------------------------------------
 
-(define (make-string-type-validator pattern)
-  (let ((rx (irregex pattern)))
-    (lambda (s) (irregex-match rx s))))
+(define (validate-struct-member-cardinality card mlist)
+  (case (string->symbol card)
+    ((one) (= (length mlist) 1))
+    ((zoo) (<= (length mlist) 1))
+    ((ooma) (>= (length mlist) 1))
+    ((zoma) #t)
+    (else (eprintf "Unrecognized value for cardinality: ~A" card))))
 
-(define (load-string-type-validator db/file type-name)
-  (let* ((pattern (get-string-type db/file type-name))
-         (val (make-string-type-validator pattern)))
+(define (validate-struct-member db/file memspec value)
+  (let* ((rel-name (car memspec))
+         (cardinality (cadr memspec))
+         (mem-type (caddr memspec))
+         (members 
+           (filter
+             (lambda (item)
+               (equal? (alist-ref 'rel-name item) rel-name))
+             value)))
+    (and (validate-struct-member-cardinality cardinality members)
+         (every (lambda (mem) (validate db/file mem-type mem)) members))))
+
+(define (no-unspecified-members? memspecs value)
+  (let ((known-rel-names (map car memspecs)))
+    (every (lambda (mem) (member (alist-ref 'rel-name mem) known-rel-names)) value)))
+
+(define (make-struct-type-validator typespec)
+  (let ((extensible (car typespec))
+        (memspecs (cadr typespec)))
+    (lambda (x)
+      (and (every (lambda (ms) (validate-struct-member db/file ms x)) memspecs)
+           (or extensible
+               (no-unspecified-members? memspecs x))))))
+
+(define (load-struct-type-validator db/file type-name)
+  (let* ((typespec (get-struct-type db/file type-name))
+         (val (make-struct-type-validator typespec)))
     (hash-table-set! validators type-name val)))
 
-(define (load-string-type-validators db/file)
-  (let ((string-types (get-string-types db/file)))
+(define (load-struct-type-validators db/file)
+  (let ((struct-types (get-struct-types db/file)))
     (for-each
-      (lambda (t) (load-string-type-validator db/file t))
-      string-types)))
+      (lambda (t) (load-struct-type-validator db/file t))
+      struct-types)))
 
 ;;; ========================================================================
-;;; ------------------------------------------------------------------------
+;;; ----  Union Types  -----------------------------------------------------
 
 (define (make-union-type-validator members)
   (lambda (x) (member (identify x) members)))
