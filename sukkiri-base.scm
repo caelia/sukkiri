@@ -9,19 +9,16 @@
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  TYPE DEFINITIONS  ------------------------------------------------
-
-(define-record-type string-type
-  (make-string-type name pattern maxlen default)
-  string-type?
-  (name name)
-  (pattern pattern set-pattern!)
-  (maxlen maxlen set-maxlen!)
-  (default default set-default!))
-
-(define-record-type number-type
-
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  UTILITY FUNCTIONS  -----------------------------------------------
+
+(define (eprintf msg . args)
+  (error (apply sprintf `(,msg ,@args))))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 ); END MODULE
 
