@@ -36,11 +36,14 @@
         (import scheme chicken)
         (use (prefix sukkiri-base b:))
         (use (prefix sukkiri-store s:))
+        (use (prefix sukkiri-data d:))
         (use (prefix medea m:))
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  INPUT FROM JSON  -------------------------------------------------
 
+(define (json->db port)
+  (let ((raw-struct (read-json port)))
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
