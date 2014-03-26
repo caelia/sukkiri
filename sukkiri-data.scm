@@ -6,11 +6,14 @@
 (module sukkiri-data
         *
         (import scheme chicken)
+        (import data-structures)
         (use sukkiri-base)
         (use sukkiri-store)
         (use irregex)
+        (use srfi-1)
         (use srfi-69)
         (use srfi-19)
+        (use srfi-19-period)
 
  
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
@@ -129,7 +132,7 @@
       vocab-types)))
 
 ;;; ========================================================================
-;;; ----  Struct Types  ----------------------------------------------------
+;;; ------  Struct Types  --------------------------------------------------
 
 (define (validate-struct-member-cardinality card mlist)
   (case (string->symbol card)
@@ -139,7 +142,7 @@
     ((zoma) #t)
     (else (eprintf "Unrecognized value for cardinality: ~A" card))))
 
-(define (validate-struct-member db/file memspec value)
+(define (validate-struct-member memspec value)
   (let* ((rel-name (car memspec))
          (cardinality (cadr memspec))
          (mem-type (caddr memspec))
@@ -149,7 +152,7 @@
                (equal? (alist-ref 'rel-name item) rel-name))
              value)))
     (and (validate-struct-member-cardinality cardinality members)
-         (every (lambda (mem) (validate db/file mem-type mem)) members))))
+         (every (lambda (mem) (validate mem-type mem)) members))))
 
 (define (no-unspecified-members? memspecs value)
   (let ((known-rel-names (map car memspecs)))
@@ -159,7 +162,7 @@
   (let ((extensible (car typespec))
         (memspecs (cadr typespec)))
     (lambda (x)
-      (and (every (lambda (ms) (validate-struct-member db/file ms x)) memspecs)
+      (and (every (lambda (ms) (validate-struct-member ms x)) memspecs)
            (or extensible
                (no-unspecified-members? memspecs x))))))
 
@@ -175,10 +178,14 @@
       struct-types)))
 
 ;;; ========================================================================
-;;; ----  Union Types  -----------------------------------------------------
+;;; ------  Union Types  ---------------------------------------------------
 
 (define (make-union-type-validator members)
-  (lambda (x) (member (identify x) members)))
+  (lambda (x)
+    (any
+      (lambda (memtype)
+        (validate memtype x))
+      members)))
 
 (define (load-union-type-validator db/file type-name)
   (let* ((members (get-union-type db/file type-name))
@@ -190,6 +197,15 @@
     (for-each
       (lambda (t) (load-union-type-validator db/file t))
       union-types)))
+
+;;; ========================================================================
+;;; ------  Generic Validation  --------------------------------------------
+
+(define (validate type value)
+  (or (equal? type "*")
+      (and (hash-table-exists? validators type)
+           (let ((validator (hash-table-ref validators type)))
+             (validator value)))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 

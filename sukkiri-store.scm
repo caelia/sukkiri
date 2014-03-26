@@ -734,28 +734,6 @@
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; ----  VALIDATION FUNCTIONS  --------------------------------------------
-
-(define (validate db/file type value)
-  (if (primitive? type)
-    (validate-primitive-type type value)
-    (do-query
-      db/file
-      (lambda (db)
-        (let ((cls (get-type-class db type)))
-          (case (string->symbol cls)
-            ((string) (validate-string-type db type value))
-            ((number) (validate-number-type db type value))
-            ((vocab) (validate-vocab-type db type value))
-            ((union) (validate-union-type db type value))
-            ((struct) (validate-struct-type db type value))
-            ((*) #t)
-            (else (eprintf "Unknown datatype: '~A'" type))))))))
-
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO  
-
-
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  STATEMENT MANIPULATION  ------------------------------------------
 
 ;;; ------  Queries  -------------------------------------------------------
