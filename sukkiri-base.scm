@@ -6,6 +6,7 @@
 (module sukkiri-base
         *
         (import scheme chicken)
+        (import extras)
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  TYPE DEFINITIONS  ------------------------------------------------
