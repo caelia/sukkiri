@@ -1,6 +1,12 @@
+(compile -s -d0 -O3 sukkiri-base.scm -j sukkiri-base)
+(compile -s -d0 -O3 sukkiri-base.import.scm)
 (compile -s -d0 -O3 sukkiri-store.scm -j sukkiri-store)
 (compile -s -d0 -O3 sukkiri-store.import.scm)
+(compile -s -d0 -O3 sukkiri-data.scm -j sukkiri-data)
+(compile -s -d0 -O3 sukkiri-data.import.scm)
 (install-extension
   'sukkiri
-  '("sukkiri-store.so" "sukkiri-store.import.so")
+  '("sukkiri-base.so" "sukkiri-base.import.so"
+    "sukkiri-store.so" "sukkiri-store.import.so"
+    "sukkiri-data.so" "sukkiri-data.import.so")
   '((version "0.1")))
