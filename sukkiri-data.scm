@@ -210,6 +210,19 @@
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  DATABASE STORAGE & RETRIEVAL  ------------------------------------
+
+(define (store-object obj)
+  (let-values (((id-pair rest)
+                (partition (lambda (elt) (eqv? (car elt) '%ID)) obj)))
+    (let-values (((type-pair rest)
+                  (partition (lambda (elt) (eqv? (car elt) '%TYPE)) rest)))
+      (let ((id (cdr id-pair))
+            (type (cdr type-pair)))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
 ) ; END MODULE
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
