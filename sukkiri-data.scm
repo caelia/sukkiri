@@ -230,7 +230,7 @@
         ((eqv? (caar input) '%ID)
           (loop (cdar input) type* (cdr input) output))
         ((eqv? (caar input) '%TYPE)
-          (loop id* (cdar input) (cdr input) (cons `(%TYPE . ,type) output)))
+          (loop id* (cdar input) (cdr input) (cons `(%TYPE . ,type*) output)))
         (else
           (loop id* type* (cdr input) (cons (car input) output)))))))
     (if (validate type members)
