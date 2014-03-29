@@ -105,6 +105,7 @@
     "INSERT INTO primitives (name) VALUES ('period');"
     "INSERT INTO primitives (name) VALUES ('nref');"
     "INSERT INTO primitives (name) VALUES ('rref');"
+    "INSERT INTO primitives (name) VALUES ('sref');"
     "INSERT INTO primitives (name) VALUES ('xref');"))
 
 (define create-string-type-table-query
@@ -194,6 +195,8 @@
     "INSERT INTO types (name, class)
      SELECT 'rref', id FROM type_classes WHERE name = 'primitive';"
     "INSERT INTO types (name, class)
+     SELECT 'sref', id FROM type_classes WHERE name = 'primitive';"
+    "INSERT INTO types (name, class)
      SELECT 'xref', id FROM type_classes WHERE name = 'primitive';"
     "INSERT INTO types (name, class)
      SELECT 'any', id FROM type_classes WHERE name = 'union';"))
@@ -215,6 +218,7 @@
     "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'datetime';"
     "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'nref';"
     "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'rref';"
+    "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'sref';"
     "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'xref';"))
 
 (define create-struct-members-table-query
@@ -230,10 +234,9 @@
   "CREATE TABLE statements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     s  TEXT NOT NULL,
-    st  INTEGER REFERENCES types(id) NOT NULL,
     p  TEXT NOT NULL,
     o  TEXT NOT NULL,
-    ot  INTEGER REFERENCES types(id) NOT NULL
+    t  INTEGER REFERENCES types(id) NOT NULL
   );")
 
 ;;; ========================================================================
@@ -444,11 +447,15 @@
 
 (define (add-general-type db name class)
   (let ((st (sql/transient db add-type-query)))
-    (exec st name class)))
+    (exec st name class))
+  (unless (string=? class "union")
+    (update-union-type db "any" members+: `(,name))))
 
-(define (delete-general-type db name)
+(define (delete-general-type db name #!optional (union? #f))
   (let ((st (sql/transient delete-type-query)))
-    (exec st name)))
+    (exec st name))
+  (unless union?
+    (update-union-type db "any" members-: `(,name))))
 
 (define (add-string-type db/file name pattern #!optional (description '()))
   (do-query
@@ -628,7 +635,7 @@
     (lambda (db)
       (let ((st (sql/transient db delete-union-type-query)))
         (exec st name))
-      (delete-general-type db name))))
+      (delete-general-type db name #t))))
 
 (define (get-string-type db/file name)
   (do-query
@@ -739,13 +746,10 @@
 ;;; ------  Queries  -------------------------------------------------------
 
 (define add-statement-query
-  "INSERT INTO statements (s, st, p, o, ot) VALUES (?, ?, ?, ?, ?);")
+  "INSERT INTO statements (s, p, o, t) VALUES (?, ?, ?, ?);")
 
 (define delete-statements-s-query
   "DELETE FROM statements WHERE s = ?;")
-
-(define delete-statements-st-query
-  "DELETE FROM statements WHERE st = ?;")
 
 (define delete-statements-p-query
   "DELETE FROM statements WHERE p = ?;")
@@ -753,8 +757,8 @@
 (define delete-statements-o-query
   "DELETE FROM statements WHERE o = ?;")
 
-(define delete-statements-ot-query
-  "DELETE FROM statements WHERE ot = ?;")
+(define delete-statements-t-query
+  "DELETE FROM statements WHERE t = ?;")
 
 (define delete-statements-sp-query
   "DELETE FROM statements WHERE s = ? AND p = ?;")
@@ -762,44 +766,26 @@
 (define delete-statements-so-query
   "DELETE FROM statements WHERE s = ? AND o = ?;")
 
-(define delete-statements-sot-query
-  "DELETE FROM statements WHERE s = ? AND ot = ?;")
+(define delete-statements-st-query
+  "DELETE FROM statements WHERE s = ? AND t = ?;")
 
 (define delete-statements-po-query
   "DELETE FROM statements WHERE p = ? AND o = ?;")
 
-(define delete-statements-stp-query
-  "DELETE FROM statements WHERE st = ? AND p = ?;")
-
-(define delete-statements-sto-query
-  "DELETE FROM statements WHERE st = ? AND o = ?;")
-
-(define delete-statements-stot-query
-  "DELETE FROM statements WHERE st = ? AND ot = ?;")
-
-(define delete-statements-pot-query
-  "DELETE FROM statements WHERE p = ? AND ot = ?;")
+(define delete-statements-pt-query
+  "DELETE FROM statements WHERE p = ? AND t = ?;")
 
 (define delete-statements-spo-query
   "DELETE FROM statements WHERE s = ? AND p = ? AND o = ?;")
 
-(define delete-statements-spot-query
-  "DELETE FROM statements WHERE s = ? AND p = ? AND ot = ?;")
-
-(define delete-statements-stpo-query
-  "DELETE FROM statements WHERE st = ? AND p = ? AND o = ?;")
-
-(define delete-statements-stpot-query
-  "DELETE FROM statements WHERE st = ? AND p = ? AND ot = ?;")
+(define delete-statements-spt-query
+  "DELETE FROM statements WHERE s = ? AND p = ? AND t = ?;")
 
 (define update-statement-object-query
-  "UPDATE statements SET o = ?, ot = ? WHERE s = ? AND p = ? AND o = ?;")
+  "UPDATE statements SET o = ?, t = ? WHERE s = ? AND p = ? AND o = ?;")
 
 (define exists-s-query
   "EXISTS (SELECT id FROM statements WHERE s = ?);") 
-
-(define exists-st-query
-  "EXISTS (SELECT id FROM statements WHERE st = ?);") 
 
 (define exists-p-query
   "EXISTS (SELECT id FROM statements WHERE p = ?);") 
@@ -807,8 +793,8 @@
 (define exists-o-query
   "EXISTS (SELECT id FROM statements WHERE o = ?);") 
 
-(define exists-ot-query
-  "EXISTS (SELECT id FROM statements WHERE ot = ?);") 
+(define exists-t-query
+  "EXISTS (SELECT id FROM statements WHERE t = ?);") 
 
 (define exists-sp-query
   "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ?);") 
@@ -816,35 +802,20 @@
 (define exists-so-query
   "EXISTS (SELECT id FROM statements WHERE s = ? AND o = ?);") 
 
-(define exists-sot-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND ot = ?);") 
-
-(define exists-stp-query
-  "EXISTS (SELECT id FROM statements WHERE st = ? AND p = ?);") 
-
-(define exists-sto-query
-  "EXISTS (SELECT id FROM statements WHERE st = ? AND o = ?);") 
-
-(define exists-stot-query
-  "EXISTS (SELECT id FROM statements WHERE st = ? AND ot = ?);") 
+(define exists-st-query
+  "EXISTS (SELECT id FROM statements WHERE s = ? AND t = ?);") 
 
 (define exists-po-query
   "EXISTS (SELECT id FROM statements WHERE p = ? AND o = ?);") 
 
-(define exists-pot-query
-  "EXISTS (SELECT id FROM statements WHERE p = ? AND ot = ?);") 
+(define exists-pt-query
+  "EXISTS (SELECT id FROM statements WHERE p = ? AND t = ?);") 
 
 (define exists-spo-query
   "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ? AND o = ?);") 
 
-(define exists-spot-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ? AND ot = ?);") 
-
-(define exists-stpo-query
-  "EXISTS (SELECT id FROM statements WHERE st = ? AND p = ? AND o = ?);") 
-
-(define exists-stpot-query
-  "EXISTS (SELECT id FROM statements WHERE st = ? AND p = ? AND ot = ?);") 
+(define exists-spt-query
+  "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ? AND t = ?);") 
 
 (define get-statements-s-query
   "SELECT s, p, o FROM statements WHERE s = ?;")
@@ -855,11 +826,8 @@
 (define get-statements-o-query
   "SELECT s, p, o FROM statements WHERE o = ?;")
 
-(define get-statements-st-query
-  "SELECT s, p, o FROM statements WHERE st = ?;")
-
-(define get-statements-ot-query
-  "SELECT s, p, o FROM statements WHERE ot = ?;")
+(define get-statements-t-query
+  "SELECT s, p, o FROM statements WHERE t = ?;")
 
 (define get-statements-sp-query
   "SELECT s, p, o FROM statements WHERE s = ? AND p = ?;")
@@ -867,44 +835,28 @@
 (define get-statements-so-query
   "SELECT s, p, o FROM statements WHERE s = ? AND o = ?;")
 
-(define get-statements-sot-query
-  "SELECT s, p, o FROM statements WHERE s = ? AND ot = ?;")
+(define get-statements-st-query
+  "SELECT s, p, o FROM statements WHERE s = ? AND t = ?;")
 
 (define get-statements-po-query
   "SELECT s, p, o FROM statements WHERE p = ? AND o = ?;")
 
-(define get-statements-stp-query
-  "SELECT s, p, o FROM statements WHERE st = ? AND p = ?;")
+(define get-statements-pt-query
+  "SELECT s, p, o FROM statements WHERE p = ? AND t = ?;")
 
-(define get-statements-sto-query
-  "SELECT s, p, o FROM statements WHERE st = ? AND o = ?;")
-
-(define get-statements-stot-query
-  "SELECT s, p, o FROM statements WHERE st = ? AND ot = ?;")
-
-(define get-statements-pot-query
-  "SELECT s, p, o FROM statements WHERE p = ? AND ot = ?;")
-
-(define get-statements-spot-query
-  "SELECT s, p, o FROM statements WHERE s = ? AND p = ? AND ot = ?;")
-
-(define get-statements-stpo-query
-  "SELECT s, p, o FROM statements WHERE st = ? AND p = ? AND o = ?;")
-
-(define get-statements-stpot-query
-  "SELECT s, p, o FROM statements WHERE st = ? AND p = ? AND ot = ?;")
+(define get-statements-spt-query
+  "SELECT s, p, o FROM statements WHERE s = ? AND p = ? AND t = ?;")
 
 ;;; ========================================================================
 ;;; ------  Functions  -----------------------------------------------------
 
 (define (add-statement db/file s p o)
-  (let ((st (identify s))
-        (ot (identify o)))
+  (let ((t (identify o)))
     (do-query
       db/file
       (lambda (db)
         (let ((st-add (sql/transient db add-statement-query)))
-          (exec st-add s st p o ot)))))) 
+          (exec st-add s p o t)))))) 
 
 (define (add-statements db/file conv sts)
   (do-query
@@ -913,31 +865,25 @@
       (let ((st-add (sql db add-statement-query)))
         (for-each
           (lambda (stmt*)
-            (let* ((stmt (conv stmt*)) (s (car stmt)) (st (cadr stmt))
-                   (p (caddr stmt)) (o (cadddr stmt)) (ot (car (cddddr stmt))))
-              (exec st-add s st p o ot)))
+            (let* ((stmt (conv stmt*)) (s (car stmt)) (p (cadr stmt))
+                   (o (caddr stmt)) (t (cadddr stmt)))
+              (exec st-add s p o t)))
           sts)))))
 
-(define (delete-statements db/file #!key (s #f) (st #f) (p #f) (o #f) (ot #f))
+(define (delete-statements db/file #!key (s #f) (st #f) (p #f) (o #f) (t #f))
   (let-values (((q-del params)
                   (cond
                     ((and s p o) (<< delete-statements-spo-query `(,s ,p ,o)))
-                    ((and st p o) (<< delete-statements-stpo-query `(,st ,p ,o)))
-                    ((and s p ot) (<< delete-statements-spot-query `(,s ,p ,ot)))
-                    ((and st p ot) (<< delete-statements-stpot-query) `(,st ,p ,ot))
+                    ((and s p t) (<< delete-statements-spt-query `(,s ,p ,t)))
                     ((and s p) (<< delete-statements-sp-query `(,s ,p)))
                     ((and s o) (<< delete-statements-so-query `(,s ,o)))
-                    ((and s ot) (<< delete-statements-sot-query `(,s ,ot)))
-                    ((and st p) (<< delete-statements-stp-query `(,st ,p)))
-                    ((and st o) (<< delete-statements-sto-query `(,st ,o)))
-                    ((and st ot) (<< delete-statements-stot-query `(,st ,ot)))
+                    ((and s t) (<< delete-statements-st-query `(,s ,t)))
                     ((and p o) (<< delete-statements-po-query `(,p ,o)))
-                    ((and p ot) (<< delete-statements-pot-query `(,p ,ot)))
+                    ((and p t) (<< delete-statements-pt-query `(,p ,t)))
                     (s (<< delete-statements-s-query `(,s)))
-                    (st (<< delete-statements-st-query `(,st)))
                     (p (<< delete-statements-p-query `(,p)))
                     (o (<< delete-statements-o-query `(,o)))
-                    (ot (<< delete-statements-ot-query `(,ot)))
+                    (t (<< delete-statements-t-query `(,t)))
                     (else (error "Invalid arguments for delete-statements.")))))
     (do-query
       db/file
@@ -952,26 +898,20 @@
       (let ((st (sql/transient db update-statement-object-query)))
         (exec st s p o)))))
 
-(define (statement-exists? db/file #!key (s #f) (st #f) (p #f) (o #f) (ot #f))
+(define (statement-exists? db/file #!key (s #f) (p #f) (o #f) (t #f))
   (let-values (((q-ex params)
                   (cond
                     ((and s p o) (<< exists-spo-query `(,s ,p ,o)))
-                    ((and st p o) (<< exists-stpo-query `(,st ,p ,o)))
-                    ((and s p ot) (<< exists-spot-query `(,s ,p ,ot)))
-                    ((and st p ot) (<< exists-stpot-query) `(,st ,p ,ot))
+                    ((and s p t) (<< exists-spt-query `(,s ,p ,t)))
                     ((and s p) (<< exists-sp-query `(,s ,p)))
                     ((and s o) (<< exists-so-query `(,s ,o)))
-                    ((and s ot) (<< exists-sot-query `(,s ,ot)))
-                    ((and st p) (<< exists-stp-query `(,st ,p)))
-                    ((and st o) (<< exists-sto-query `(,st ,o)))
-                    ((and st ot) (<< exists-stot-query `(,st ,ot)))
+                    ((and s t) (<< exists-st-query `(,s ,t)))
                     ((and p o) (<< exists-po-query `(,p ,o)))
-                    ((and p ot) (<< exists-pot-query `(,p ,ot)))
+                    ((and p t) (<< exists-pt-query `(,p ,t)))
                     (s (<< exists-s-query `(,s)))
-                    (st (<< exists-st-query `(,st)))
                     (p (<< exists-p-query `(,p)))
                     (o (<< exists-o-query `(,o)))
-                    (ot (<< exists-ot-query `(,ot)))
+                    (t (<< exists-t-query `(,t)))
                     (else (error "Invalid arguments for statement-exists?.")))))
     (do-query
       db/file
@@ -979,31 +919,25 @@
         (let ((st-ex (sql/transient db q-ex)))
           (apply exec `(,st-ex ,@params)))))))
 
-(define (get-statements db/file #!key (s #f) (st #f) (p #f) (o #f) (ot #f))
+(define (get-statements db/file #!key (s #f) (p #f) (o #f) (t #f))
   (let-values (((q-get params)
                 (cond
-                  ((and s p ot) (<< get-statements-spot-query `(,s ,p ,ot)))
-                  ((and st p o) (<< get-statements-stpo-query `(,st ,p ,o)))
-                  ((and st p ot) (<< get-statements-stpot-query `(,st ,p ,ot)))
+                  ((and s p t) (<< get-statements-spt-query `(,s ,p ,t)))
                   ((and s p) (<< get-statements-sp-query `(,s ,p)))
                   ((and s o) (<< get-statements-so-query `(,s ,o)))
-                  ((and s ot) (<< get-statements-sot-query `(,s ,ot)))
-                  ((and st p) (<< get-statements-stp-query `(,st ,p)))
-                  ((and st o) (<< get-statements-sto-query `(,st ,o)))
-                  ((and st ot) (<< get-statements-stot-query `(,st ,ot)))
+                  ((and s t) (<< get-statements-st-query `(,s ,t)))
                   ((and p o) (<< get-statements-po-query `(,p ,o)))
-                  ((and p ot) (<< get-statements-pot-query `(,p ,ot)))
+                  ((and p t) (<< get-statements-pt-query `(,p ,t)))
                   (s (<< get-statements-s-query `(,s)))
-                  (st (<< get-statements-st-query `(,st)))
                   (p (<< get-statements-p-query `(,p)))
                   (o (<< get-statements-o-query `(,o)))
-                  (ot (<< get-statements-ot-query `(,ot)))
+                  (t (<< get-statements-t-query `(,t)))
                   (else (error "Invalid arguments for get-statements")))))
     (do-query
       db/file
       (lambda (db)
         (let ((st-get (sql/transient db q-get)))
-          (apply exec `(,st-get ,@params)))))))
+          (apply query `(,fetch-alists ,st-get ,@params)))))))
       
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
