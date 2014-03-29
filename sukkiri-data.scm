@@ -213,13 +213,38 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  DATABASE STORAGE & RETRIEVAL  ------------------------------------
 
-(define (store-object obj)
-  (let-values (((id-pair rest)
-                (partition (lambda (elt) (eqv? (car elt) '%ID)) obj)))
-    (let-values (((type-pair rest)
-                  (partition (lambda (elt) (eqv? (car elt) '%TYPE)) rest)))
-      (let ((id (cdr id-pair))
-            (type (cdr type-pair)))
+(define (store-struct db/file str)
+  (let-values (((id type members)
+    (let loop ((id* #f) (type* #f) (input str) (output '()))
+      (cond
+        ((and id* type*)
+          (values id* type* (append output input)))
+        ((and (null? input) (not id*))
+          (eprintf "Invalid struct: id unspecified."))
+        ((and (null? input) (not type*))
+          (eprintf "Invalid struct: type unspecified."))
+        ((and id* (eqv? (caar input) '%ID))
+          (eprintf "Invalid struct: id specified twice."))
+        ((and type* (eqv? (caar input) '%TYPE))
+          (eprintf "Invalid struct: type specified twice."))
+        ((eqv? (caar input) '%ID)
+          (loop (cdar input) type* (cdr input) output))
+        ((eqv? (caar input) '%TYPE)
+          (loop id* (cdar input) (cdr input) (cons `(%TYPE . ,type) output)))
+        (else
+          (loop id* type* (cdr input) (cons (car input) output)))))))
+    (if (validate type members)
+      (add-statements db/file identity (map (lambda (m) (cons id m)) members))
+      (eprintf "Invalid struct: failed type validation."))))
+
+(define (retrieve-struct db/file id)
+  (let ((statements (get-statements db/file s: id)))
+    (cons
+      `(%ID . ,id) 
+      (map
+        (lambda (elt)
+          `(,(alist-ref 'p elt) . ,(alist-ref 'o elt)))
+        statements))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
