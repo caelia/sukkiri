@@ -14,7 +14,6 @@
         (use srfi-69)
         (use srfi-19)
         (use srfi-19-period)
-
  
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  USER TYPE VALIDATION  --------------------------------------------
@@ -71,13 +70,15 @@
 
 ;;; ------  String Types  --------------------------------------------------
 
-(define (make-string-type-validator pattern)
+(define (make-string-type-validator type-name pattern)
   (let ((rx (irregex pattern)))
-    (lambda (s) (irregex-match rx s))))
+    (lambda (s)
+      (and (irregex-match rx s)
+           `(,type-name . ,s)))))
 
 (define (load-string-type-validator db/file type-name)
   (let* ((pattern (get-string-type db/file type-name))
-         (val (make-string-type-validator pattern)))
+         (val (make-string-type-validator type-name pattern)))
     (hash-table-set! validators type-name val)))
 
 (define (load-string-type-validators db/file)
@@ -89,7 +90,7 @@
 ;;; ========================================================================
 ;;; ------  Number Types  --------------------------------------------------
 
-(define (make-number-type-validator typespec)
+(define (make-number-type-validator type-name typespec)
   (let* ((minval (alist-ref 'minval typespec))
          (maxval (alist-ref 'maxval typespec))
          (step (alist-ref 'step typespec)))
@@ -101,11 +102,12 @@
            (or (null? step)
                (integer?
                   (/ (or (and (null? minval) x)
-                         (- x minval)) step)))))))
+                         (- x minval)) step)))
+           `(,type-name . ,x)))))
 
 (define (load-number-type-validator db/file type-name)
   (let* ((typespec (get-number-type db/file type-name))
-         (val (make-number-type-validator typespec)))
+         (val (make-number-type-validator type-name typespec)))
     (hash-table-set! validators type-name val)))
 
 (define (load-number-type-validators db/file)
@@ -117,12 +119,15 @@
 ;;; ========================================================================
 ;;; ------  Vocabulary Types  ----------------------------------------------
 
-(define (make-vocab-type-validator terms)
-  (lambda (x) (member x terms)))
+(define (make-vocab-type-validator type-name terms)
+  (lambda (x)
+    (let ((mem (member x terms)))
+      (and mem 
+           `(,type-name . ,x)))))
 
 (define (load-vocab-type-validator db/file type-name)
   (let* ((terms (get-vocab-type db/file type-name))
-         (val (make-vocab-type-validator terms)))
+         (val (make-vocab-type-validator type-name terms)))
     (hash-table-set! validators type-name val)))
 
 (define (load-vocab-type-validators db/file)
@@ -158,13 +163,14 @@
   (let ((known-rel-names (map car memspecs)))
     (every (lambda (mem) (member (alist-ref 'rel-name mem) known-rel-names)) value)))
 
-(define (make-struct-type-validator typespec)
+(define (make-struct-type-validator type-name typespec)
   (let ((extensible (car typespec))
         (memspecs (cadr typespec)))
     (lambda (x)
       (and (every (lambda (ms) (validate-struct-member ms x)) memspecs)
            (or extensible
-               (no-unspecified-members? memspecs x))))))
+               (no-unspecified-members? memspecs x))
+           `(,type-name . ,x)))))
 
 (define (load-struct-type-validator db/file type-name)
   (let* ((typespec (get-struct-type db/file type-name))
@@ -180,11 +186,11 @@
 ;;; ========================================================================
 ;;; ------  Union Types  ---------------------------------------------------
 
+;; N.B.: Returns (SUBTYPE . VALUE), not (UNION-TYPE . VALUE)
 (define (make-union-type-validator members)
   (lambda (x)
-    (any
-      (lambda (memtype)
-        (validate memtype x))
+    (find
+      (lambda (memtype) (validate memtype x))
       members)))
 
 (define (load-union-type-validator db/file type-name)
@@ -204,47 +210,10 @@
 (define (validate type value)
   (or (equal? type "*")
       (and (hash-table-exists? validators type)
-           (let ((validator (hash-table-ref validators type)))
-             (validator value)))))
-
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; ----  DATABASE STORAGE & RETRIEVAL  ------------------------------------
-
-(define (store-struct db/file str)
-  (let-values (((id type members)
-    (let loop ((id* #f) (type* #f) (input str) (output '()))
-      (cond
-        ((and id* type*)
-          (values id* type* (append output input)))
-        ((and (null? input) (not id*))
-          (eprintf "Invalid struct: id unspecified."))
-        ((and (null? input) (not type*))
-          (eprintf "Invalid struct: type unspecified."))
-        ((and id* (eqv? (caar input) '%ID))
-          (eprintf "Invalid struct: id specified twice."))
-        ((and type* (eqv? (caar input) '%TYPE))
-          (eprintf "Invalid struct: type specified twice."))
-        ((eqv? (caar input) '%ID)
-          (loop (cdar input) type* (cdr input) output))
-        ((eqv? (caar input) '%TYPE)
-          (loop id* (cdar input) (cdr input) (cons `(%TYPE . ,type*) output)))
-        (else
-          (loop id* type* (cdr input) (cons (car input) output)))))))
-    (if (validate type members)
-      (add-statements db/file identity (map (lambda (m) (cons id m)) members))
-      (eprintf "Invalid struct: failed type validation."))))
-
-(define (retrieve-struct db/file id)
-  (let ((statements (get-statements db/file s: id)))
-    (cons
-      `(%ID . ,id) 
-      (map
-        (lambda (elt)
-          `(,(alist-ref 'p elt) . ,(alist-ref 'o elt)))
-        statements))))
+           (let* ((validator (hash-table-ref validators type))
+                  (validated (validator value)))
+             (and validated
+                  `(,validated . ,value))))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 

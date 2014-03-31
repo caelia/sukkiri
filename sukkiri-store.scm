@@ -942,6 +942,31 @@
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  HIGH-LEVEL INTERFACE  --------------------------------------------
+
+(define (store-struct db/file valid? str)
+  (let ((id (alist-ref '%ID str))
+        (type (alist-ref '%TYPE str))
+        (members
+          (remove
+            (lambda (elt) (eqv? (car elt) '%ID))
+            str)))
+    (if (valid? type members)
+      (add-statements db/file identity (map (lambda (m) (cons id m)) members))
+      (eprintf "Invalid struct: failed type validation."))))
+
+(define (retrieve-struct db/file id)
+  (let ((statements (get-statements db/file s: id)))
+    (cons
+      `(%ID . ,id) 
+      (map
+        (lambda (elt)
+          `(,(alist-ref 'p elt) . ,(alist-ref 'o elt)))
+        statements))))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
 ) ; END MODULE
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
