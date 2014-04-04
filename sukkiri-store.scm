@@ -1,4 +1,4 @@
-;;; rel8r-sqlite.scm -- SQLite3 interface for the Rel8r tool.
+;;; sukkiri-store.scm -- SQLite3 interface for Sukkiri.
 ;;;   Copyright © 2014 by Matthew C. Gushee <matt@gushee.net>
 ;;;   This program is open-source software, released under the GNU General
 ;;;   Public License v3. See the accompanying LICENSE file for details.
@@ -50,12 +50,17 @@
 (define string->db identity)
 
 (define (boolean->db b)
-  (if b "1" "0"))
+  (if b 1 0))
 
 (define (datetime->db dt)
   (with-output-to-string
     (lambda ()
       (serialize dt))))
+
+(define date->db date->string)
+
+(define (time->db t)
+  (date->string (time->date t)))
 
 (define validate-integer integer?)
 
@@ -77,7 +82,7 @@
 (define (primitive? typespec)
   (memv
     (string->symbol typespec)
-    '(integer float boolean string date time datetime nref rref xref)))
+    '(integer float boolean string date time period nref rref xref)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -101,7 +106,6 @@
     "INSERT INTO primitives (name) VALUES ('string');"
     "INSERT INTO primitives (name) VALUES ('date');"
     "INSERT INTO primitives (name) VALUES ('time');"
-    "INSERT INTO primitives (name) VALUES ('datetime');"
     "INSERT INTO primitives (name) VALUES ('period');"
     "INSERT INTO primitives (name) VALUES ('nref');"
     "INSERT INTO primitives (name) VALUES ('rref');"
@@ -236,7 +240,8 @@
     s  TEXT NOT NULL,
     p  TEXT NOT NULL,
     o  TEXT NOT NULL,
-    t  INTEGER REFERENCES types(id) NOT NULL
+    t  INTEGER REFERENCES types(id) NOT NULL,
+    dt TEXT DEFAULT CURRENT_TIMESTAMP
   );")
 
 ;;; ========================================================================
@@ -782,7 +787,7 @@
   "DELETE FROM statements WHERE s = ? AND p = ? AND t = ?;")
 
 (define update-statement-object-query
-  "UPDATE statements SET o = ?, t = ? WHERE s = ? AND p = ? AND o = ?;")
+  "UPDATE statements SET o = ?, t = ?, dt = datetime('now')  WHERE s = ? AND p = ? AND o = ?;")
 
 (define exists-s-query
   "EXISTS (SELECT id FROM statements WHERE s = ?);") 
@@ -850,7 +855,14 @@
 ;;; ========================================================================
 ;;; ------  Functions  -----------------------------------------------------
 
-(define (add-statement db/file s p o)
+(define (add-statement db/file s p o t)
+  (do-query
+    db/file
+    (lambda (db)
+      (let ((st-add (sql/transient db add-statement-query)))
+        (exec st-add s p o t)))))
+
+(define (add-statement* db/file s p o)
   (let ((t (identify o)))
     (do-query
       db/file
@@ -945,7 +957,22 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  HIGH-LEVEL INTERFACE  --------------------------------------------
 
-(define (store-struct db/file valid? str)
+(define (prepare-statement db/file st)
+  (let* ((p (car st))
+         (o (caadr st))
+         (t (cdadr st))
+         (tc (get-type-class db/file t)))
+    (cond
+      ((eqv? p '%TYPE) (values p t o))
+      ((equal? t "boolean") (values p t (boolean->db o)))
+      ((equal? t "date") (values p t (date->db o)))
+      ((equal? t "time") (values p t (time->db o)))
+      ((equal? t "period") (values p t (period->db o)))
+      ((equal? tc "struct") (values p "nref" (add-struct db/file o)))
+      (else (values p t o)))))
+
+;; FIXME: validation should be done at higher level
+(define (add-struct db/file valid? str)
   (let ((id (alist-ref '%ID str))
         (type (alist-ref '%TYPE str))
         (members

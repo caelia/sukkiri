@@ -16,6 +16,31 @@
         (use srfi-19-period)
  
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  DATE/TIME UTILITIES  ---------------------------------------------
+
+(define (hms->time #!key (h 0) (m 0) (s 0))
+  (seconds->time (+ (* 3600 h) (* 60 m) s)))
+
+(define (hms-string->time str #!optional (primary-unit 'min))
+  (let* ((hms (map string->number (string-split str ":")))
+         (len (length hms)))
+    (cond
+      ((= len 3) (hms->time h: (car hms) m: (cadr hms) s: (caddr hms)))
+      ((and (= len 2) (eqv? primary-unit 'hr)) (hms->time h: (car hms) m: (cadr hms)))
+      ((and (= len 2) (eqv? primary-unit 'min)) (hms->time m: (car hms) s: (cadr hms)))
+      ((and (= len 1) (eqv? primary-unit 'hr)) (hms->time h: (car hms)))
+      ((and (= len 1) (eqv? primary-unit 'min)) (hms->time m: (car hms)))
+      ((and (= len 1) (eqv? primary-unit 'sec)) (hms->time s: (car hms)))
+      ((= len 0) (hms->time))
+      (else (eprintf "Invalid argument for hms-string->time: '~A'\n" str)))))
+
+(define (ymd->date y m d)
+  (make-date 0 0 0 0 d m y))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  USER TYPE VALIDATION  --------------------------------------------
 
 (define validators (make-hash-table))
@@ -214,6 +239,25 @@
                   (validated (validator value)))
              (and validated
                   `(,validated . ,value))))))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  HIGH-LEVEL INTERFACE  --------------------------------------------
+
+(define (store-struct db/file str)
+  (let ((id (alist-ref '%ID str))
+        (type (alist-ref '%TYPE str))
+        (members
+          (remove
+            (lambda (elt) (or (eqv? (car elt) '%ID) (eqv? (car elt) '%TYPE)))
+            str)))
+    (if (validate type members)
+      (add-struct db/file (map (lambda (m) (cons id m)) `((%TYPE . ,type) ,@members)))
+      (eprintf "Invalid struct: failed type validation."))))
+
+
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
