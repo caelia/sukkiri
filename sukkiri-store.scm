@@ -52,15 +52,13 @@
 (define (boolean->db b)
   (if b 1 0))
 
-(define (datetime->db dt)
-  (with-output-to-string
-    (lambda ()
-      (serialize dt))))
-
 (define date->db date->string)
 
 (define (time->db t)
   (date->string (time->date t)))
+
+;; Currently a period is just a seconds value
+(define period->db identity)
 
 (define validate-integer integer?)
 
@@ -70,19 +68,16 @@
 
 (define validate-string string?)
 
-(define (validate-datetime dt)
-  (or (date? dt)
-      (time? dt)
-      (time-period? dt)
-      (and (list? dt)
-           (= (length dt) 2)
-           (date? (car dt))
-           (time? (cadr dt)))))
+(define validate-date date?)
+
+(define validate-time time?)
+
+(define validate-period number?)
 
 (define (primitive? typespec)
   (memv
     (string->symbol typespec)
-    '(integer float boolean string date time period nref rref xref)))
+    '(integer float boolean string date time period nref rref xref sref)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -870,16 +865,19 @@
         (let ((st-add (sql/transient db add-statement-query)))
           (exec st-add s p o t)))))) 
 
-(define (add-statements db/file conv sts)
+(define (add-statements db/file sts)
   (do-query
     db/file
     (lambda (db)
       (let ((st-add (sql db add-statement-query)))
         (for-each
-          (lambda (stmt*)
-            (let* ((stmt (conv stmt*)) (s (car stmt)) (p (cadr stmt))
-                   (o (caddr stmt)) (t (cadddr stmt)))
-              (exec st-add s p o t)))
+          (lambda (stmt)
+            (let ((s (car stmt))
+                  (p (cadr stmt))
+                  (o* (caddr stmt))
+                  (t* (cadddr stmt)))
+              (let-values (((t o) (prepare-object db t* o*)))
+                (exec st-add s p o t))))
           sts)))))
 
 (define (delete-statements db/file #!key (s #f) (st #f) (p #f) (o #f) (t #f))
@@ -957,31 +955,25 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  HIGH-LEVEL INTERFACE  --------------------------------------------
 
-(define (prepare-statement db/file st)
-  (let* ((p (car st))
-         (o (caadr st))
-         (t (cdadr st))
-         (tc (get-type-class db/file t)))
+(define (prepare-object db/file type obj)
+  (let ((class (get-type-class db/file type)))
     (cond
-      ((eqv? p '%TYPE) (values p t o))
-      ((equal? t "boolean") (values p t (boolean->db o)))
-      ((equal? t "date") (values p t (date->db o)))
-      ((equal? t "time") (values p t (time->db o)))
-      ((equal? t "period") (values p t (period->db o)))
-      ((equal? tc "struct") (values p "nref" (add-struct db/file o)))
-      (else (values p t o)))))
+      ((equal? type "boolean") (values type (boolean->db obj)))
+      ((equal? type "date") (values type (date->db obj)))
+      ((equal? type "time") (values type (time->db obj)))
+      ((equal? type "period") (values type (period->db obj)))
+      ((equal? class "struct") (values "nref" (add-struct db/file obj)))
+      (else (values type obj)))))
 
 ;; FIXME: validation should be done at higher level
-(define (add-struct db/file valid? str)
+(define (add-struct db/file str)
   (let ((id (alist-ref '%ID str))
         (type (alist-ref '%TYPE str))
         (members
           (remove
             (lambda (elt) (eqv? (car elt) '%ID))
             str)))
-    (if (valid? type members)
-      (add-statements db/file identity (map (lambda (m) (cons id m)) members))
-      (eprintf "Invalid struct: failed type validation."))))
+    (add-statements db/file (map (lambda (m) (cons id m)) members))))
 
 (define (retrieve-struct db/file id)
   (let ((statements (get-statements db/file s: id)))

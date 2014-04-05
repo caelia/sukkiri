@@ -37,6 +37,9 @@
 (define (ymd->date y m d)
   (make-date 0 0 0 0 d m y))
 
+(define (hms->seconds h m s)
+  (+ (* 3600 h) (* 60 m) s))
+
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
@@ -69,19 +72,15 @@
                        time?))
   (hash-table-set! validators "period"
                    (or (alist-ref 'period custom-validators)
-                       time-period?))
-  (hash-table-set! validators "datetime"
-                   (or (alist-ref 'datetime custom-validators)
-                       (lambda (x)
-                         (and (list? x)
-                              (= (length x) 2)
-                              (date? (car x))
-                              (time? (cadr x))))))
+                       number?))
   (hash-table-set! validators "nref"
                    (or (alist-ref 'nref custom-validators)
                        string?))
   (hash-table-set! validators "rref"
                    (or (alist-ref 'rref custom-validators)
+                       string?))
+  (hash-table-set! validators "sref"
+                   (or (alist-ref 'sref custom-validators)
                        string?))
   (hash-table-set! validators "xref"
                    (or (alist-ref 'xref custom-validators)
@@ -199,7 +198,7 @@
 
 (define (load-struct-type-validator db/file type-name)
   (let* ((typespec (get-struct-type db/file type-name))
-         (val (make-struct-type-validator typespec)))
+         (val (make-struct-type-validator type-name typespec)))
     (hash-table-set! validators type-name val)))
 
 (define (load-struct-type-validators db/file)
