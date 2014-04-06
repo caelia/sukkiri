@@ -965,7 +965,6 @@
       ((equal? class "struct") (values "nref" (add-struct db/file obj)))
       (else (values type obj)))))
 
-;; FIXME: validation should be done at higher level
 (define (add-struct db/file str)
   (let ((id (alist-ref '%ID str))
         (type (alist-ref '%TYPE str))

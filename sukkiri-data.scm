@@ -178,14 +178,16 @@
          (members 
            (filter
              (lambda (item)
-               (equal? (alist-ref 'rel-name item) rel-name))
+               ; (equal? (alist-ref 'rel-name item) rel-name))
+               (equal? (car item) rel-name))
              value)))
     (and (validate-struct-member-cardinality cardinality members)
          (every (lambda (mem) (validate mem-type mem)) members))))
 
 (define (no-unspecified-members? memspecs value)
-  (let ((known-rel-names (map car memspecs)))
-    (every (lambda (mem) (member (alist-ref 'rel-name mem) known-rel-names)) value)))
+  (let ((known-rel-names (append (map car memspecs) '(%TYPE %ID %LABEL))))
+    ; (every (lambda (mem) (member (alist-ref 'rel-name mem) known-rel-names)) value)))
+    (every (lambda (mem) (member ('rel-name mem) known-rel-names)) value)))
 
 (define (make-struct-type-validator type-name typespec)
   (let ((extensible (car typespec))
@@ -246,16 +248,11 @@
 ;;; ----  HIGH-LEVEL INTERFACE  --------------------------------------------
 
 (define (store-struct db/file str)
-  (let ((id (alist-ref '%ID str))
-        (type (alist-ref '%TYPE str))
-        (members
-          (remove
-            (lambda (elt) (or (eqv? (car elt) '%ID) (eqv? (car elt) '%TYPE)))
-            str)))
-    (if (validate type members)
-      (add-struct db/file (map (lambda (m) (cons id m)) `((%TYPE . ,type) ,@members)))
-      (eprintf "Invalid struct: failed type validation."))))
+  (if (validate type members)
+    (add-struct db/file str)
+    (eprintf "Invalid struct: failed type validation.")))
 
+(define (retrieve-struct db/file id)
 
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
