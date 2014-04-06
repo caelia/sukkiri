@@ -163,11 +163,16 @@
 ;;; ========================================================================
 ;;; ------  Struct Types  --------------------------------------------------
 
-(define (validate-struct-member-cardinality card mlist)
+;; FIXME: need to allow for members with value defined as #f
+(define (validate-struct-member-cardinality card mem)
   (case (string->symbol card)
-    ((one) (= (length mlist) 1))
-    ((zoo) (<= (length mlist) 1))
-    ((ooma) (>= (length mlist) 1))
+    ((one) (or (not (vector? mem))
+               (= (vector-length mem) 1)))
+    ((zoo) (or (not mem)
+               (not (vector? mem))
+               (<= (vector-length mem) 1)))
+    ((ooma) (or (not (vector? mem))
+                (>= (vector-length mem) 1)))
     ((zoma) #t)
     (else (eprintf "Unrecognized value for cardinality: ~A" card))))
 
@@ -253,7 +258,7 @@
     (eprintf "Invalid struct: failed type validation.")))
 
 (define (retrieve-struct db/file id)
-
+  (get-struct db/file id))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 

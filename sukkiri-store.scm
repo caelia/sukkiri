@@ -974,7 +974,7 @@
             str)))
     (add-statements db/file (map (lambda (m) (cons id m)) members))))
 
-(define (retrieve-struct db/file id)
+(define (get-struct db/file id)
   (let ((statements (get-statements db/file s: id)))
     (cons
       `(%ID . ,id) 

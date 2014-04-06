@@ -1,4 +1,4 @@
-;;; sukkiri-json.scm -- JSON I/O routines for Sukkiri
+;;; sukkiri-ajax.scm -- JSON I/O routines for Sukkiri
 ;;;   Copyright © 2014 by Matthew C. Gushee <matt@gushee.net>
 ;;;   This program is open-source software, released under the GNU General
 ;;;   Public License v3. See the accompanying LICENSE file for details.
@@ -31,7 +31,7 @@
 ;;;   "label": "Work",
 ;;;   "address": "dr.jane.v.morgan@sea-creature-research.com" }
 
-(module sukkiri-json
+(module sukkiri-ajax
         *
         (import scheme chicken)
         (use (prefix sukkiri-base b:))
@@ -42,8 +42,14 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  INPUT FROM JSON  -------------------------------------------------
 
-(define (json->db port)
+(define (json->db db/file port)
   (let ((raw-struct (read-json port)))
+    (d:store-struct db/file raw-struct)))
+
+(define (db->json db/file id port)
+  (let ((raw-struct (d:retrieve-struct db/file id)))
+    (write-json raw-struct port)))
+
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
