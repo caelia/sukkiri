@@ -16,6 +16,22 @@
         (use srfi-19-period)
  
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  GENERIC TYPE IDENTIFICATION  -------------------------------------
+
+(define (identify x)
+  (cond
+    ((boolean? x) `(,boolean . ,x))
+    ((integer? x) `(,integer . ,x))
+    ((flonum? x) `(,float . ,x))
+    ((string? x) `(,string . ,x))
+    ((list? x) (map identify x))
+    ((vector? x) (list->vector (map identify (vector->list x))))
+    (else (eprintf "Can't identify '~A'." x))))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  DATE/TIME UTILITIES  ---------------------------------------------
 
 (define (hms->time #!key (h 0) (m 0) (s 0))
@@ -177,27 +193,50 @@
     ((zoma) #t)
     (else (eprintf "Unrecognized value for cardinality: ~A" card))))
 
+(define (zero-allowed? card)
+  (or (eqv? card 'zoo) (eqv? card 'zoma)))
+
+(define (validate-member-vector mem-type vec)
+  (let loop ((input (vector->list vec))
+             (output '()))
+    (if (null? input)
+      output
+      (let ((valid (validate mem-type (car input))))
+        (and valid
+             (loop (cdr input) (cons valid output)))))))
+
 (define (validate-struct-member memspec value)
   (let* ((rel-name (car memspec))
          (cardinality (cadr memspec))
          (mem-type (caddr memspec))
-         (member (alist-ref rel-name value eqv? #:undefined)))
-    (and (validate-struct-member-cardinality cardinality members)
-         (every (lambda (mem) (validate mem-type mem)) members))))
+         (mem (alist-ref rel-name value eqv? #:undefined)))
+    (and (validate-struct-member-cardinality cardinality mem)
+         (if (vector? mem)
+           (validate-member-vector mem-type mem)
+           (validate mem-type mem)))))
 
 (define (no-unspecified-members? memspecs value)
   (let ((known-rel-names (append (map car memspecs) '(%TYPE %ID %LABEL))))
-    ; (every (lambda (mem) (member (alist-ref 'rel-name mem) known-rel-names)) value)))
-    (every (lambda (mem) (member ('rel-name mem) known-rel-names)) value)))
+    (every (lambda (mem) (member (car mem) known-rel-names)) value)))
+
+(define (validate-struct-members memspecs struct)
+  (let loop ((specs memspecs)
+             (output '()))
+    (if (null? specs)
+      output
+      (let ((valid (validate-struct-member (car specs) struct)))
+        (and valid
+             (loop (cdr specs) (cons valid output)))))))
 
 (define (make-struct-type-validator type-name typespec)
   (let ((extensible (car typespec))
         (memspecs (cadr typespec)))
     (lambda (x)
-      (and (every (lambda (ms) (validate-struct-member ms x)) memspecs)
-           (or extensible
-               (no-unspecified-members? memspecs x))
-           `(,type-name . ,x)))))
+      (let ((members-valid (validate-struct-members memspecs x)))
+        (and members-valid
+             (or extensible
+                 (no-unspecified-members? memspecs x))
+             `(,type-name . ,members-valid))))))
 
 (define (load-struct-type-validator db/file type-name)
   (let* ((typespec (get-struct-type db/file type-name))

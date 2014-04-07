@@ -12,7 +12,6 @@
         (import irregex)
         (import srfi-1)
         (use sql-de-lite)
-        (use s11n)
         (use srfi-19)
         (use srfi-19-period)
         (use sukkiri-base)
@@ -21,10 +20,6 @@
 ;;; ----  UTILITY FUNCTIONS  -----------------------------------------------
 
 (define << values)
-
-;; DUMMY! Will be a type-identifier
-(define (identify _)
-  #f)
 
 (define db->integer string->number)
 
@@ -37,11 +32,6 @@
     ((string=? dbval "0") #f)
     ((string=? dbval "1") #t)
     (else (eprintf "'~A' is not a boolean value" dbval))))
-
-(define (db->datetime dbval)
-  (with-input-from-string dbval
-    (lambda ()
-      (deserialize))))
 
 (define integer->db number->string)
 
@@ -857,14 +847,6 @@
       (let ((st-add (sql/transient db add-statement-query)))
         (exec st-add s p o t)))))
 
-(define (add-statement* db/file s p o)
-  (let ((t (identify o)))
-    (do-query
-      db/file
-      (lambda (db)
-        (let ((st-add (sql/transient db add-statement-query)))
-          (exec st-add s p o t)))))) 
-
 (define (add-statements db/file sts)
   (do-query
     db/file
@@ -965,15 +947,20 @@
       ((equal? class "struct") (values "nref" (add-struct db/file obj)))
       (else (values type obj)))))
  
-(define (flatten-vector-objects db/file str)
+(define (flatten-list-objects db/file str)
   (let loop ((stmts-in str) (stmts-out '()))
     (if (null? stmts-in)
       stmts-out
-      (let* ((p (caar stmts-in))
-             (o (cdar stmts-in)))
-        (if (vector? o)
-          (loop (cdr stmts-in) (append stmts-out (map (lambda (o)
-
+      (let ((p (caar stmts-in))
+            (o (cdar stmts-in)))
+        (if (list? o)
+          (loop
+            (cdr stmts-in)
+            (append stmts-out
+              (map (lambda (o*) `(,p . ,o*)) o)))
+          (loop
+            (cdr stmts-in)
+            (cons `(,p . ,o) stmts-out)))))))
 
 (define (add-struct db/file str)
   (let ((id (alist-ref '%ID str))
