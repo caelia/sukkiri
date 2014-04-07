@@ -163,16 +163,17 @@
 ;;; ========================================================================
 ;;; ------  Struct Types  --------------------------------------------------
 
-;; FIXME: need to allow for members with value defined as #f
 (define (validate-struct-member-cardinality card mem)
   (case (string->symbol card)
-    ((one) (or (not (vector? mem))
-               (= (vector-length mem) 1)))
-    ((zoo) (or (not mem)
+    ((one) (and (defined? mem)
+                (or (not (vector? mem))
+                    (= (vector-length mem) 1))))
+    ((zoo) (or (undefined? mem)
                (not (vector? mem))
                (<= (vector-length mem) 1)))
-    ((ooma) (or (not (vector? mem))
-                (>= (vector-length mem) 1)))
+    ((ooma) (and (defined? mem)
+                 (or (not (vector? mem))
+                     (>= (vector-length mem) 1))))
     ((zoma) #t)
     (else (eprintf "Unrecognized value for cardinality: ~A" card))))
 
@@ -180,12 +181,7 @@
   (let* ((rel-name (car memspec))
          (cardinality (cadr memspec))
          (mem-type (caddr memspec))
-         (members 
-           (filter
-             (lambda (item)
-               ; (equal? (alist-ref 'rel-name item) rel-name))
-               (equal? (car item) rel-name))
-             value)))
+         (member (alist-ref rel-name value eqv? #:undefined)))
     (and (validate-struct-member-cardinality cardinality members)
          (every (lambda (mem) (validate mem-type mem)) members))))
 

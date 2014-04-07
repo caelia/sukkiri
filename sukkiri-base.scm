@@ -19,6 +19,12 @@
 (define (eprintf msg . args)
   (error (apply sprintf `(,msg ,@args))))
 
+(define (undefined? x)
+  (eqv? x #:undefined))
+
+(define (defined? x)
+  (not (undefined? x)))
+
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 ); END MODULE
