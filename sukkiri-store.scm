@@ -874,8 +874,8 @@
           (lambda (stmt)
             (let ((s (car stmt))
                   (p (cadr stmt))
-                  (o* (caddr stmt))
-                  (t* (cadddr stmt)))
+                  (t* (caddr stmt))
+                  (o* (cdddr stmt)))
               (let-values (((t o) (prepare-object db t* o*)))
                 (exec st-add s p o t))))
           sts)))))
@@ -964,6 +964,16 @@
       ((equal? type "period") (values type (period->db obj)))
       ((equal? class "struct") (values "nref" (add-struct db/file obj)))
       (else (values type obj)))))
+ 
+(define (flatten-vector-objects db/file str)
+  (let loop ((stmts-in str) (stmts-out '()))
+    (if (null? stmts-in)
+      stmts-out
+      (let* ((p (caar stmts-in))
+             (o (cdar stmts-in)))
+        (if (vector? o)
+          (loop (cdr stmts-in) (append stmts-out (map (lambda (o)
+
 
 (define (add-struct db/file str)
   (let ((id (alist-ref '%ID str))
