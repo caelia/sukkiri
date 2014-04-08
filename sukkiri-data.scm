@@ -67,40 +67,45 @@
 ;;; ========================================================================
 ;;; ------  Set up primitive type validators  ------------------------------
 
+(define (primitive-validator typename test)
+  (lambda (value)
+    (and (test value)
+         `(,typename . ,value))))
+
 (define (setup-primitive-validators #!optional (custom-validators '()))
   (hash-table-set! validators "integer"
                    (or (alist-ref 'integer custom-validators)
-                       integer?))
+                       (primitive-validator "integer" integer?)))
   (hash-table-set! validators "float"
                    (or (alist-ref 'float custom-validators)
-                       flonum?))
+                       (primitive-validator "float" flonum?)))
   (hash-table-set! validators "boolean"
                    (or (alist-ref 'boolean custom-validators)
-                       boolean?))
+                       (primitive-validator "boolean" boolean?)))
   (hash-table-set! validators "string"
                    (or (alist-ref 'string custom-validators)
-                       string?))
+                       (primitive-validator "string" string?)))
   (hash-table-set! validators "date"
                    (or (alist-ref 'date custom-validators)
-                       date?))
+                       (primitive-validator "date" date?)))
   (hash-table-set! validators "time"
                    (or (alist-ref 'time custom-validators)
-                       time?))
+                       (primitive-validator "time" time?)))
   (hash-table-set! validators "period"
                    (or (alist-ref 'period custom-validators)
-                       number?))
+                       (primitive-validator "period" number?)))
   (hash-table-set! validators "nref"
                    (or (alist-ref 'nref custom-validators)
-                       string?))
+                       (primitive-validator "nref" string?)))
   (hash-table-set! validators "rref"
                    (or (alist-ref 'rref custom-validators)
-                       string?))
+                       (primitive-validator "rref" string?)))
   (hash-table-set! validators "sref"
                    (or (alist-ref 'sref custom-validators)
-                       string?))
+                       (primitive-validator "sref" string?)))
   (hash-table-set! validators "xref"
                    (or (alist-ref 'xref custom-validators)
-                       string?)))
+                       (primitive-validator "xref" string?))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -277,10 +282,8 @@
 (define (validate type value)
   (or (equal? type "*")
       (and (hash-table-exists? validators type)
-           (let* ((validator (hash-table-ref validators type))
-                  (validated (validator value)))
-             (and validated
-                  `(,validated . ,value))))))
+           (let ((validator (hash-table-ref validators type)))
+             (validator value)))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 

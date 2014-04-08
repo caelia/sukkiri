@@ -686,7 +686,8 @@
              (memspecs
                (map
                  (lambda (ms)
-                   `(,(alist-ref 'rel_name ms) ,(alist-ref 'cardinality ms) ,(alist-ref 'mem_type ms)))
+                   `(,(string->symbol (alist-ref 'rel_name ms))
+                     ,(alist-ref 'cardinality ms) ,(alist-ref 'mem_type ms)))
                  memspecs*)))
         `(,extensible ,memspecs)))))
 
