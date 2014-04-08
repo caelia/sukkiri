@@ -20,10 +20,10 @@
 
 (define (identify x)
   (cond
-    ((boolean? x) `(,boolean . ,x))
-    ((integer? x) `(,integer . ,x))
-    ((flonum? x) `(,float . ,x))
-    ((string? x) `(,string . ,x))
+    ((boolean? x) `(boolean . ,x))
+    ((integer? x) `(integer . ,x))
+    ((flonum? x) `(float . ,x))
+    ((string? x) `(string . ,x))
     ((list? x) (map identify x))
     ((vector? x) (list->vector (map identify (vector->list x))))
     (else (eprintf "Can't identify '~A'." x))))
@@ -193,8 +193,9 @@
     ((zoma) #t)
     (else (eprintf "Unrecognized value for cardinality: ~A" card))))
 
-(define (zero-allowed? card)
-  (or (eqv? card 'zoo) (eqv? card 'zoma)))
+(define (zero-allowed? spec)
+  (let ((card (string->symbol (cadr spec))))
+    (or (eqv? card 'zoo) (eqv? card 'zoma))))
 
 (define (validate-member-vector mem-type vec)
   (let loop ((input (vector->list vec))
@@ -205,37 +206,37 @@
         (and valid
              (loop (cdr input) (cons valid output)))))))
 
-(define (validate-struct-member memspec value)
+(define (validate-struct-member memspec mem)
   (let* ((rel-name (car memspec))
          (cardinality (cadr memspec))
-         (mem-type (caddr memspec))
-         (mem (alist-ref rel-name value eqv? #:undefined)))
+         (mem-type (caddr memspec)))
     (and (validate-struct-member-cardinality cardinality mem)
          (if (vector? mem)
            (validate-member-vector mem-type mem)
            (validate mem-type mem)))))
 
-(define (no-unspecified-members? memspecs value)
-  (let ((known-rel-names (append (map car memspecs) '(%TYPE %ID %LABEL))))
-    (every (lambda (mem) (member (car mem) known-rel-names)) value)))
-
-(define (validate-struct-members memspecs struct)
-  (let loop ((specs memspecs)
-             (output '()))
-    (if (null? specs)
-      output
-      (let ((valid (validate-struct-member (car specs) struct)))
-        (and valid
-             (loop (cdr specs) (cons valid output)))))))
+(define (validate-struct-members memspecs struct #!optional (extensible #f))
+  (let loop ((specs memspecs) (mems struct) (output '()))
+    (cond
+      ((and (null? specs) (null? mems)) output)
+      ((null? specs) (and extensible (append output (map identify mems))))
+      ((null? mems) (and (every zero-allowed? specs) output))
+      (else 
+        (let-values (((current-specs other-specs)
+                      (partition (lambda (sp) (eqv? (car sp) (caar mems))) specs)))
+          (let ((valid
+                  (if (null? current-specs)
+                    (identify (car mems))
+                    (validate-struct-member (car current-specs) (car mems)))))
+            (and valid
+                 (loop other-specs (cdr mems) (cons valid output)))))))))
 
 (define (make-struct-type-validator type-name typespec)
   (let ((extensible (car typespec))
         (memspecs (cadr typespec)))
-    (lambda (x)
-      (let ((members-valid (validate-struct-members memspecs x)))
+    (lambda (struct)
+      (let ((members-valid (validate-struct-members memspecs struct extensible)))
         (and members-valid
-             (or extensible
-                 (no-unspecified-members? memspecs x))
              `(,type-name . ,members-valid))))))
 
 (define (load-struct-type-validator db/file type-name)
@@ -287,13 +288,17 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  HIGH-LEVEL INTERFACE  --------------------------------------------
 
-(define (store-struct db/file str)
-  (if (validate type members)
-    (add-struct db/file str)
+(define (store-struct struct)
+  (if (validate (alist-ref '%TYPE struct) struct)
+    (let ((db (connect)))
+      (add-struct db struct)
+      (disconnect))
     (eprintf "Invalid struct: failed type validation.")))
 
-(define (retrieve-struct db/file id)
-  (get-struct db/file id))
+(define (retrieve-struct id)
+  (let ((db (connect)))
+    (get-struct db id)
+    (disconnect)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 

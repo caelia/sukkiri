@@ -42,19 +42,19 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  INPUT FROM JSON  -------------------------------------------------
 
-(define (json->db db/file port)
-  (let ((raw-struct (read-json port)))
-    (d:store-struct db/file raw-struct)))
-
-(define (db->json db/file id port)
-  (let ((raw-struct (d:retrieve-struct db/file id)))
-    (write-json raw-struct port)))
+(define (json->db port)
+  (let ((raw-struct (m:read-json port)))
+    (d:store-struct raw-struct)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  OUTPUT TO JSON  --------------------------------------------------
+
+(define (db->json id port)
+  (let ((raw-struct (d:retrieve-struct id)))
+    (m:write-json raw-struct port)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 

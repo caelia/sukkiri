@@ -17,6 +17,29 @@
         (use sukkiri-base)
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+;;; ----  CURRENT DATABASE  ------------------------------------------------
+
+(define %db-file% (make-parameter #f))
+
+(define %current-db% (make-parameter #f))
+
+(define (connect #!optional (filespec (%db-file%)))
+  (if filespec
+    (let ((db (open-database filespec)))
+      (%current-db% db)
+      db)
+    (error "No database specified.")))
+
+(define (disconnect)
+  (let ((db (%current-db%)))
+    (and db
+         (close-database db)
+         (%current-db% #f))))
+
+;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  UTILITY FUNCTIONS  -----------------------------------------------
 
 (define << values)
@@ -280,11 +303,11 @@
   "INSERT INTO vocabs (name, term) VALUES (?, ?);")
 
 (define add-struct-type-query
-  "INSERT INTO struct_types (name, extensible) VALUES (?, ?);")
+  "INSERT INTO struct_types (name, extensible, description) VALUES (?, ?, ?);")
 
 (define add-struct-member-query
   "INSERT INTO struct_type_members (struct_type, rel_name, cardinality, mem_type)
-    SELECT struct_types.id, ?, cardinalities.id, types.id)
+    SELECT struct_types.id, ?, cardinalities.id, types.id
     FROM struct_types, cardinalities, types
     WHERE struct_types.name = ?  AND cardinalities.name = ? AND types.name = ?;")
 
@@ -485,11 +508,7 @@
         (exec st-main name extensible description)
         (for-each
           (lambda (mem)
-            (exec st-mem
-                  (alist-ref 'rel-name mem)
-                  name
-                  (alist-ref 'cardinality mem)
-                  (alist-ref 'type mem)))
+            (exec st-mem (symbol->string (car mem)) name (cadr mem) (caddr mem)))
           members))
         (add-general-type db name "struct"))))
 
@@ -656,11 +675,11 @@
              (memspecs*
                (query fetch-alists st name))
              (extensible
-               (= (alist-ref 'extensible (car memspecs*))))
+               (= (alist-ref 'extensible (car memspecs*)) 1))
              (memspecs
                (map
                  (lambda (ms)
-                   `(,(alist-ref 'rel-name ms) ,(alist-ref 'cardinality ms) ,(alist-ref 'mem-type ms)))
+                   `(,(alist-ref 'rel_name ms) ,(alist-ref 'cardinality ms) ,(alist-ref 'mem_type ms)))
                  memspecs*)))
         `(,extensible ,memspecs)))))
 
