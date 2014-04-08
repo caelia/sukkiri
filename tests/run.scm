@@ -47,6 +47,9 @@
 (define terms-db01-03
   '("arachnid" "bonsai" "carcinoma" "dervish" "eloquence" "forensics" "grapefruit"))
 
+(define struct-db01-04
+  '(#f (("label" "one" "string") ("address" "one" "string"))))
+
 (define members-db01-06
   '("simple-email" "some-words" "boolean"))
 
@@ -74,11 +77,17 @@
         (begin
           (s:add-vocab-type test-db "some-words" terms-db01-03)
           (s:get-vocab-type test-db "some-words")))
+      (test
+        "DB01.04: Struct type"
+        struct-db01-04
+        (begin
+          (s:add-struct-type test-db "email-address" extensible: #f members: '((label "one" "string") (address "one" "string")))
+          (s:get-struct-type test-db "email-address")))
       (current-test-comparator uequal?)
       (test
         "DB01.05: Built-in union type 'any'"
         '("boolean" "integer" "float" "string" "date" "time" "period" "nref"
-          "rref" "xref" "sref" "simple-email" "boozle" "some-words")
+          "rref" "xref" "sref" "simple-email" "boozle" "some-words" "email-address")
         (s:get-union-type test-db "any"))
       (test
         "DB01.06: User-defined union type"

@@ -314,13 +314,11 @@
 
 (define add-union-type-member-query
   "INSERT INTO union_types (name, member_type)
-    SELECT ?, types.id FROM union_types, types
-    WHERE member_type = types.id AND types.name = ?;")
+    SELECT ?, id FROM types WHERE types.name = ?;")
 
 (define add-type-query
   "INSERT INTO types (name, class)
-    SELECT ?, type_classes.id FROM types, type_classes
-    WHERE class = type_classes.id AND type_classes.name = ?;")
+    SELECT ?, id FROM type_classes WHERE type_classes.name = ?;")
 
 (define update-string-type-query
   "UPDATE string_types SET pattern = ? WHERE name = ?;")
@@ -417,9 +415,12 @@
    AND struct_types.name = ? AND rel_name = ?;")
 
 (define get-struct-type-query
-  "SELECT extensible, rel_name, cardinality, mem_type
-   FROM struct_types, struct_type_members
-   WHERE struct_types.name = ? AND struct_type_members.struct_type = struct_types.id;")
+  "SELECT extensible, rel_name, cardinalities.name as cardinality, types.name as mem_type
+    FROM struct_types, struct_type_members, cardinalities, types
+    WHERE struct_types.name = ?
+      AND struct_type_members.struct_type = struct_types.id
+      AND struct_type_members.cardinality = cardinalities.id
+      AND struct_type_members.mem_type = types.id;")
 
 (define get-union-type-members-query
   "SELECT types.name FROM union_types, types
@@ -458,8 +459,7 @@
       (begin
         (handle-exceptions
           exn
-          ; (lambda (exn) (rollback db) (close-database db) (abort exn))
-          (lambda (exn) (print "DB EXCEPTION!") (pp exn) (rollback db) (close-database db) (abort exn))
+          (lambda (exn) (rollback db) (close-database db) (abort exn))
           (begin-transaction db)
           (f db)
           (commit db))
@@ -505,14 +505,14 @@
           terms))
       (add-general-type db name "vocab"))))
 
-(define (add-struct-type db/file name #!key (extensible 1) (members '())
+(define (add-struct-type db/file name #!key (extensible #t) (members '())
                                             (description '()))
   (do-query
     db/file
     (lambda (db)
       (let ((st-main (sql/transient db add-struct-type-query))
             (st-mem (sql db add-struct-member-query)))
-        (exec st-main name extensible description)
+        (exec st-main name (if extensible 1 0) description)
         (for-each
           (lambda (mem)
             (exec st-mem (symbol->string (car mem)) name (cadr mem) (caddr mem)))
