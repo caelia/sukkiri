@@ -7,6 +7,7 @@
         *
         (import scheme chicken)
         (import extras)
+        (import files)
         (import data-structures)
         (import ports)
         (import irregex)
@@ -140,7 +141,7 @@
   );")
 
 (define create-vocab-table-query
-  "CREATE TABLE vocabs (
+  "CREATE TABLE vocab_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     term TEXT NOT NULL
@@ -201,7 +202,7 @@
     "INSERT INTO types (name, class)
      SELECT 'time', id FROM type_classes WHERE name = 'primitive';"
     "INSERT INTO types (name, class)
-     SELECT 'datetime', id FROM type_classes WHERE name = 'primitive';"
+     SELECT 'period', id FROM type_classes WHERE name = 'primitive';"
     "INSERT INTO types (name, class)
      SELECT 'nref', id FROM type_classes WHERE name = 'primitive';"
     "INSERT INTO types (name, class)
@@ -227,7 +228,7 @@
     "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'string';"
     "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'date';"
     "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'time';"
-    "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'datetime';"
+    "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'period';"
     "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'nref';"
     "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'rref';"
     "INSERT INTO union_types (name, member_type) SELECT 'any', id FROM types WHERE types.name = 'sref';"
@@ -300,7 +301,7 @@
    VALUES (?, ?, ?, ?, ?, ?);")
 
 (define add-vocab-type-term-query
-  "INSERT INTO vocabs (name, term) VALUES (?, ?);")
+  "INSERT INTO vocab_types (name, term) VALUES (?, ?);")
 
 (define add-struct-type-query
   "INSERT INTO struct_types (name, extensible, description) VALUES (?, ?, ?);")
@@ -312,10 +313,14 @@
     WHERE struct_types.name = ?  AND cardinalities.name = ? AND types.name = ?;")
 
 (define add-union-type-member-query
-  "INSERT INTO union_types (name, member_type) VALUES (?, ?);")
+  "INSERT INTO union_types (name, member_type)
+    SELECT ?, types.id FROM union_types, types
+    WHERE member_type = types.id AND types.name = ?;")
 
 (define add-type-query
-  "INSERT INTO types (name, class) VALUES (?, ?);")
+  "INSERT INTO types (name, class)
+    SELECT ?, type_classes.id FROM types, type_classes
+    WHERE class = type_classes.id AND type_classes.name = ?;")
 
 (define update-string-type-query
   "UPDATE string_types SET pattern = ? WHERE name = ?;")
@@ -337,7 +342,7 @@
   "UPDATE number_types SET digits = ? WHERE name = ?;")
 
 (define update-vocab-type-delete-term-query
-  "DELETE FROM vocabs WHERE name = ? and term = ?;")
+  "DELETE FROM vocab_types WHERE name = ? and term = ?;")
 
 (define update-struct-type-extensible-query
   "UPDATE struct_types SET extensible = ? WHERE name = ?;")
@@ -417,7 +422,8 @@
    WHERE struct_types.name = ? AND struct_type_members.struct_type = struct_types.id;")
 
 (define get-union-type-members-query
-  "SELECT member_type FROM union_types WHERE name = ?;")
+  "SELECT types.name FROM union_types, types
+    WHERE member_type = types.id AND union_types.name = ?;")
 
 (define get-type-class-query
   "SELECT class FROM types WHERE name = ?;")
@@ -452,7 +458,8 @@
       (begin
         (handle-exceptions
           exn
-          (lambda (exn) (rollback db) (close-database db) (abort exn))
+          ; (lambda (exn) (rollback db) (close-database db) (abort exn))
+          (lambda (exn) (print "DB EXCEPTION!") (pp exn) (rollback db) (close-database db) (abort exn))
           (begin-transaction db)
           (f db)
           (commit db))
@@ -998,6 +1005,13 @@
         (lambda (elt)
           `(,(alist-ref 'p elt) . ,(alist-ref 'o elt)))
         statements))))
+
+(define (init-store filespec #!optional (replace #f))
+  (%db-file% filespec)
+  (when replace
+    (delete-file* filespec))
+  (unless (file-exists? filespec)
+    (create-db filespec)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
