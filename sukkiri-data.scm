@@ -261,9 +261,13 @@
 ;; N.B.: Returns (SUBTYPE . VALUE), not (UNION-TYPE . VALUE)
 (define (make-union-type-validator members)
   (lambda (x)
-    (find
-      (lambda (memtype) (validate memtype x))
-      members)))
+    (let loop ((members* members))
+      (and (not (null? members*))
+           (handle-exceptions
+             exn
+             (lambda (exn) (abort (loop (cdr members*))))
+             (or (validate (car members*) x)
+                 (loop (cdr members*))))))))
 
 (define (load-union-type-validator db/file type-name)
   (let* ((members (get-union-type db/file type-name))

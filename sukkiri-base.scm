@@ -19,6 +19,16 @@
 (define (eprintf msg . args)
   (error (apply sprintf `(,msg ,@args))))
 
+(define %object-log-file% (make-parameter "obj.log"))
+
+(define (log-obj msg obj #!optional (logfile (%object-log-file%)))
+  (with-output-to-file
+    logfile
+    (lambda ()
+      (print msg)
+      (pp obj))
+    #:append))
+
 (define (undefined? x)
   (eqv? x #:undefined))
 

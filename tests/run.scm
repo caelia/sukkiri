@@ -236,7 +236,7 @@
       #f
       (d:validate "time" '())))
   (test-group "[VN02] Validating User-defined Atomic Types"
-    (load-string-type-validator test-db "simple-email")
+    (d:load-string-type-validator test-db "simple-email")
     (test
       "VN02.01: String Type [valid]"
       '("simple-email" . "mickey-mouse@disneyland.com")
@@ -249,7 +249,7 @@
       "VN02.03: String Type [invalid]"
       #f
       (d:validate "simple-email" "http://allagash.bonzo.com/"))
-    (load-number-type-validator test-db "boozle")
+    (d:load-number-type-validator test-db "boozle")
     (test
       "VN02.04: Number Type [35 - valid]"
       '("boozle" . 35)
@@ -282,6 +282,44 @@
       "VN02.11: Number Type [-37 - invalid]"
       #f
       (d:validate "boozle" -37))
+    (d:load-vocab-type-validator test-db "some-words")
+    (test
+      "VN02.12: Vocab type [\"dervish\" - valid]"
+      '("some-words" . "dervish")
+      (d:validate "some-words" "dervish"))
+    (test
+      "VN02.13: Vocab type [\"mycelium\" - invalid]"
+      #f
+      (d:validate "some-words" "mycelium"))
+    (test
+      "VN02.14: Vocab type [29 - invalid]"
+      #f
+      (d:validate "some-words" 29))
+    (d:load-union-type-validator test-db "marzipan")
+    (test
+      "VN02.15: Union type [\"dervish\" - valid]"
+      '("some-words" . "dervish")
+      (d:validate "marzipan" "dervish"))
+    (test
+      "VN02.16: Union type [\"wilma-flintstone@bedrock.net\" - valid]"
+      '("simple-email" . "dervish")
+      (d:validate "marzipan" "dervish"))
+    (test
+      "VN02.17: Union type [#f - valid]"
+      '("boolean" . #f)
+      (d:validate "marzipan" #f))
+    (test
+      "VN02.18: Union type [\"mycelium\" - invalid]"
+      #f
+      (d:validate "marzipan" "mycelium"))
+    (test
+      "VN02.19: Union type ['(a b c) - invalid]"
+      #f
+      (d:validate "marzipan" '(a b c)))
+    (test
+      "VN02.18: Union type [1014 - invalid]"
+      #f
+      (d:validate "marzipan" 1014))
               )
   (test-group "[VN03] Validating Struct Types"
               ))
