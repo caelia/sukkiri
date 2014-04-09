@@ -118,7 +118,8 @@
 (define (make-string-type-validator type-name pattern)
   (let ((rx (irregex pattern)))
     (lambda (s)
-      (and (irregex-match rx s)
+      (and (string? s)
+           (irregex-match rx s)
            `(,type-name . ,s)))))
 
 (define (load-string-type-validator db/file type-name)
@@ -140,7 +141,8 @@
          (maxval (alist-ref 'maxval typespec))
          (step (alist-ref 'step typespec)))
     (lambda (x)
-      (and (or (null? minval)
+      (and (number? x)
+           (or (null? minval)
                (>= x minval))
            (or (null? maxval)
                (<= x maxval))
@@ -240,9 +242,14 @@
   (let ((extensible (car typespec))
         (memspecs (cadr typespec)))
     (lambda (struct)
-      (let ((members-valid (validate-struct-members memspecs struct extensible)))
-        (and members-valid
-             `(,type-name . ,members-valid))))))
+      (let-values (((system-members normal-members)
+                    (partition
+                      (lambda (mem) (member (car mem) '(%TYPE %ID %LABEL)))
+                      struct)))
+        (let ((members-valid
+               (validate-struct-members memspecs normal-members extensible)))
+          (and members-valid
+               `(,type-name ,@system-members ,@members-valid)))))))
 
 (define (load-struct-type-validator db/file type-name)
   (let* ((typespec (get-struct-type db/file type-name))
@@ -263,11 +270,8 @@
   (lambda (x)
     (let loop ((members* members))
       (and (not (null? members*))
-           (handle-exceptions
-             exn
-             (lambda (exn) (abort (loop (cdr members*))))
-             (or (validate (car members*) x)
-                 (loop (cdr members*))))))))
+           (or (validate (car members*) x)
+               (loop (cdr members*)))))))
 
 (define (load-union-type-validator db/file type-name)
   (let* ((members (get-union-type db/file type-name))

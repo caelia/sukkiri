@@ -49,6 +49,9 @@
 (define struct01
   '(#f ((label "one" "string") (address "one" "string"))))
 
+(define struct02
+  '(#f ((%TYPE "sref" "email-address") (label "one" "string") (address "one" "string"))))
+
 (define union-members01
   '("simple-email" "some-words" "boolean"))
 
@@ -90,7 +93,8 @@
       "DB01.04: Struct type"
       struct01
       (begin
-        (s:add-struct-type test-db "email-address" extensible: #f members: '((label "one" "string") (address "one" "string")))
+        (s:add-struct-type test-db "email-address" extensible: #f
+                           members: '((label "one" "string") (address "one" "string")))
         (s:get-struct-type test-db "email-address")))
     (current-test-comparator uequal?)
     (test
@@ -302,8 +306,8 @@
       (d:validate "marzipan" "dervish"))
     (test
       "VN02.16: Union type [\"wilma-flintstone@bedrock.net\" - valid]"
-      '("simple-email" . "dervish")
-      (d:validate "marzipan" "dervish"))
+      '("simple-email" . "wilma-flintstone@bedrock.net")
+      (d:validate "marzipan" "wilma-flintstone@bedrock.net"))
     (test
       "VN02.17: Union type [#f - valid]"
       '("boolean" . #f)
