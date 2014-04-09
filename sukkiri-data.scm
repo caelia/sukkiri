@@ -216,11 +216,15 @@
 (define (validate-struct-member memspec mem)
   (let* ((rel-name (car memspec))
          (cardinality (cadr memspec))
-         (mem-type (caddr memspec)))
+         (mem-type (caddr memspec))
+         (memval (cdr mem)))
     (and (validate-struct-member-cardinality cardinality mem)
-         (if (vector? mem)
-           (validate-member-vector mem-type mem)
-           (validate mem-type mem)))))
+         (let ((valid-memval
+                 (if (vector? memval)
+                   (validate-member-vector mem-type memval)
+                   (validate mem-type memval))))
+           (and valid-memval
+                `(,rel-name . ,valid-memval))))))
 
 (define (validate-struct-members memspecs struct #!optional (extensible #f))
   (let loop ((specs memspecs) (mems struct) (output '()))
@@ -238,6 +242,11 @@
             (and valid
                  (loop other-specs (cdr mems) (cons valid output)))))))))
 
+(define (prepare-system-members smems)
+  (map
+    (lambda (mem) `(,(car mem) . ("sref" . ,(cdr mem))))
+    smems))
+
 (define (make-struct-type-validator type-name typespec)
   (let ((extensible (car typespec))
         (memspecs (cadr typespec)))
@@ -249,7 +258,8 @@
         (let ((members-valid
                (validate-struct-members memspecs normal-members extensible)))
           (and members-valid
-               `(,type-name ,@system-members ,@members-valid)))))))
+               (let ((smems (prepare-system-members system-members)))
+                 `(,type-name ,@smems ,@members-valid))))))))
 
 (define (load-struct-type-validator db/file type-name)
   (let* ((typespec (get-struct-type db/file type-name))

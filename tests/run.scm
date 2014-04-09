@@ -30,6 +30,11 @@
   (and (= (length l1) (length l2))
        (every (lambda (elt) (member elt l2)) l1)))
 
+;; Compare 2 structs
+(define (struct=? s1 s2)
+  (and (equal? (car s1) (car s2))
+       (uequal? (cdr s1) (cdr s2))))
+
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
@@ -46,11 +51,8 @@
 (define terms01
   '("arachnid" "bonsai" "carcinoma" "dervish" "eloquence" "forensics" "grapefruit"))
 
-(define struct01
+(define struct-spec01
   '(#f ((label "one" "string") (address "one" "string"))))
-
-(define struct02
-  '(#f ((%TYPE "sref" "email-address") (label "one" "string") (address "one" "string"))))
 
 (define union-members01
   '("simple-email" "some-words" "boolean"))
@@ -60,6 +62,15 @@
 
 (define time01
   (date->time date01))
+
+(define struct-instance01a
+  '((%TYPE . "email-address") (%ID . "email/jane-morgan")
+    (label . "Work") (address . "dr.jane.v.morgan@sea-creature-research.com")))
+
+(define struct-instance01b
+  '("email-address" (%TYPE . ("sref" . "email-address"))
+    (%ID . ("sref" . "email/jane-morgan")) (label . ("string" . "Work"))
+    (address . ("string" . "dr.jane.v.morgan@sea-creature-research.com"))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -91,7 +102,7 @@
         (s:get-vocab-type test-db "some-words")))
     (test
       "DB01.04: Struct type"
-      struct01
+      struct-spec01
       (begin
         (s:add-struct-type test-db "email-address" extensible: #f
                            members: '((label "one" "string") (address "one" "string")))
@@ -323,9 +334,15 @@
     (test
       "VN02.18: Union type [1014 - invalid]"
       #f
-      (d:validate "marzipan" 1014))
-              )
+      (d:validate "marzipan" 1014)))
   (test-group "[VN03] Validating Struct Types"
+    (current-test-comparator struct=?)
+    (d:load-struct-type-validator test-db "email-address")
+    (test
+      "VN03.01: Email address - valid"
+      struct-instance01b
+      (d:validate "email-address" struct-instance01a))
+    (reset-comparator)
               ))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
