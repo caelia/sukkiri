@@ -119,7 +119,25 @@
       (begin
         (s:add-union-type test-db "marzipan" union-members01)
         (s:get-union-type test-db "marzipan")))
-    (reset-comparator)))
+    )
+  (test-group "[DB02] Storing & Retrieving Statements"
+    (test
+      "DB02.01: Simple Statement, retrieved by ID"
+      '(((s . "/stuff/nonsense") (p . "content") (o . "Stuff & Nonsense")))
+      (begin
+        (s:add-statement test-db "/stuff/nonsense" "content" "Stuff & Nonsense" "string")
+        (s:get-statements test-db s: "/stuff/nonsense")))
+    (test
+      "DB02.02: Multiple Statements w/common ID"
+      '(((s . "/stuff/nonsense") (p . "content") (o . "Stuff & Nonsense"))
+        ((s . "/stuff/nonsense") (p . "alcatraz") (o . 492))
+        ((s . "/stuff/nonsense") (p . "shirt") (o . "Kalvin Cline")))
+      (begin
+        (s:add-statement test-db "/stuff/nonsense" "alcatraz" 492 "integer")
+        (s:add-statement test-db "/stuff/nonsense" "shirt" "Kalvin Cline" "string")
+        (s:get-statements test-db s: "/stuff/nonsense")))
+    (reset-comparator)
+    ))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 

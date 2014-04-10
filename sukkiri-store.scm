@@ -43,6 +43,8 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  UTILITY FUNCTIONS  -----------------------------------------------
 
+(define iso-format "~Y-~m-~dT~H:~M:~S")
+
 (define << values)
 
 (define db->integer string->number)
@@ -57,6 +59,14 @@
     ((string=? dbval "1") #t)
     (else (eprintf "'~A' is not a boolean value" dbval))))
 
+(define (db->date dbval)
+  (string->date dbval iso-format))
+
+(define (db->time dbval)
+  (date->time (string->date dbval iso-format)))
+
+(define db->period string->number)
+
 (define integer->db number->string)
 
 (define float->db number->string)
@@ -66,10 +76,11 @@
 (define (boolean->db b)
   (if b 1 0))
 
-(define date->db date->string)
+(define date->db d)
+  (date->string d iso-format))
 
 (define (time->db t)
-  (date->string (time->date t)))
+  (date->string (time->date t) iso-format))
 
 ;; Currently a period is just a seconds value
 (define period->db identity)
@@ -835,34 +846,34 @@
   "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ? AND t = ?);") 
 
 (define get-statements-s-query
-  "SELECT s, p, o FROM statements WHERE s = ?;")
+  "SELECT s, p, o, t FROM statements WHERE s = ?;")
 
 (define get-statements-p-query
-  "SELECT s, p, o FROM statements WHERE p = ?;")
+  "SELECT s, p, o, t FROM statements WHERE p = ?;")
 
 (define get-statements-o-query
-  "SELECT s, p, o FROM statements WHERE o = ?;")
+  "SELECT s, p, o, t FROM statements WHERE o = ?;")
 
 (define get-statements-t-query
-  "SELECT s, p, o FROM statements WHERE t = ?;")
+  "SELECT s, p, o, t FROM statements WHERE t = ?;")
 
 (define get-statements-sp-query
-  "SELECT s, p, o FROM statements WHERE s = ? AND p = ?;")
+  "SELECT s, p, o, t FROM statements WHERE s = ? AND p = ?;")
 
 (define get-statements-so-query
-  "SELECT s, p, o FROM statements WHERE s = ? AND o = ?;")
+  "SELECT s, p, o, t FROM statements WHERE s = ? AND o = ?;")
 
 (define get-statements-st-query
-  "SELECT s, p, o FROM statements WHERE s = ? AND t = ?;")
+  "SELECT s, p, o, t FROM statements WHERE s = ? AND t = ?;")
 
 (define get-statements-po-query
-  "SELECT s, p, o FROM statements WHERE p = ? AND o = ?;")
+  "SELECT s, p, o, t FROM statements WHERE p = ? AND o = ?;")
 
 (define get-statements-pt-query
-  "SELECT s, p, o FROM statements WHERE p = ? AND t = ?;")
+  "SELECT s, p, o, t FROM statements WHERE p = ? AND t = ?;")
 
 (define get-statements-spt-query
-  "SELECT s, p, o FROM statements WHERE s = ? AND p = ? AND t = ?;")
+  "SELECT s, p, o, t FROM statements WHERE s = ? AND p = ? AND t = ?;")
 
 ;;; ========================================================================
 ;;; ------  Functions  -----------------------------------------------------
