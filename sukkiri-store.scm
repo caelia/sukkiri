@@ -76,7 +76,7 @@
 (define (boolean->db b)
   (if b 1 0))
 
-(define date->db d)
+(define (date->db d)
   (date->string d iso-format))
 
 (define (time->db t)
@@ -949,6 +949,22 @@
         (let ((st-ex (sql/transient db q-ex)))
           (apply exec `(,st-ex ,@params)))))))
 
+(define (object->ext-type statement)
+  (let* ((subject (alist-ref 's statement))
+         (prop (alist-ref 'p statement))
+         (type (alist-ref 't statement))
+         (raw-object (alist-ref 'o statement))
+         (object
+           (case (string->symbol type)
+             ((integer) (db->integer raw-object))
+             ((float) (db->float raw-object))
+             ((boolean) (db->boolean raw-object))
+             ((date) (db->date raw-object))
+             ((time) (db->time raw-object))
+             ((period) (db->period raw-object))
+             (else raw-object))))
+    `((s . ,subject) (p . ,prop) (o . ,object))))
+
 (define (get-statements db/file #!key (s #f) (p #f) (o #f) (t #f))
   (let-values (((q-get params)
                 (cond
@@ -966,8 +982,9 @@
     (do-query
       db/file
       (lambda (db)
-        (let ((st-get (sql/transient db q-get)))
-          (apply query `(,fetch-alists ,st-get ,@params)))))))
+        (let* ((st-get (sql/transient db q-get))
+               (raw-results (apply query `(,fetch-alists ,st-get ,@params))))
+          (map object->ext-type raw-results))))))
       
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
