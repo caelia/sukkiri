@@ -4,3 +4,4 @@
 *.swp
 *.import.scm
 *.db
+*.log
