@@ -1,0 +1,14 @@
+iges
+mesh
+vnd.collada+xml
+vnd.dwf
+vnd.flatland.3dml
+vnd.gdl
+vnd.gs-gdl
+vnd.gtw
+vnd.moml+xml
+vnd.mts
+vnd.parasolid.transmit.binary
+vnd.parasolid.transmit.text
+vnd.vtu
+vrml

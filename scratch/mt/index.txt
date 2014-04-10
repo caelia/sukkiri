@@ -1,0 +1,350 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<!-- saved from url=(0054)http://www.iana.org/assignments/media-types/index.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+
+
+
+  
+  
+  
+  
+  <meta name="GENERATOR" content="Adobe PageMill 3.0 Win">
+
+
+
+
+  
+  
+  
+  
+  
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  <title>IANA | MIME Media Types</title>
+  <meta name="Template" content="S:\OFFICE97\OFFICE\html.dot">
+</head>
+
+
+<body bgcolor="#ffffff">
+
+
+
+
+
+<p></p>
+
+
+
+<center>
+  
+<table border="0" cellpadding="0" cellspacing="0" width="95%">
+
+
+
+
+    <tbody>
+
+
+
+    <tr>
+
+
+
+ 
+      <td align="center" width="25%"> 
+        
+      
+      
+      
+      <div align="left"><img src="./index_files/iana-logo-pageheader.png" naturalsizeflag="0" alt="IANA Logo" align="bottom" height="145" width="258"></div>
+
+
+
+
+      </td>
+
+
+
+
+      <td align="center" width="68%"><b><font size="+2">MIME Media Types</font></b></td>
+
+
+
+
+    </tr>
+
+
+
+
+    <tr>
+
+
+
+ 
+      <td colspan="2"> 
+        
+      
+      
+      
+      <hr noshade="noshade" size="1">
+        
+      
+      
+      
+      <p align="center"><font size="+2"><b>MIME Media Types</b></font></p>
+
+
+
+
+        
+      
+      
+      
+      <blockquote> 
+		
+          
+        
+        
+        
+        <p>[<a href="http://www.ietf.org/rfc/rfc2046.txt?number=2046">RFC2046</a>] specifies that Media Types (formerly known as MIME types) and Media Subtypes will be assigned and listed by the IANA.</p>
+
+
+
+
+          
+        
+        
+        
+        <p>Procedures for registering Media Types can be found in 
+          <a href="http://tools.ietf.org/html/draft-ietf-appsawg-media-type-regs-14">[RFC-ietf-appsawg-media-type-regs-14]</a>,
+          <a href="http://www.ietf.org/rfc/rfc4289.txt?number=4289">[RFC4289]</a>, and
+          <a href="http://www.rfc-editor.org/rfc/rfc6657.txt">[RFC6657]</a>. 
+          Additional procedures for registering media types for transfer via Real-time Transport Protocol (RTP) can be found in <a href="http://www.rfc-editor.org/rfc/rfc4855.txt">[RFC4855]</a>.</p>
+
+
+
+
+
+          
+        
+        
+        
+        <p>The following is the list of Directories of Content Types and Subtypes:</p>
+
+
+
+
+		
+          
+        
+        
+        
+        <p><a href="http://www.iana.org/assignments/media-types/application/">application</a></p>
+
+
+
+
+          
+        
+        
+        
+        <p><a href="http://www.iana.org/assignments/media-types/audio/">audio</a></p>
+
+
+
+        
+        
+        
+        <p><a href="http://www.iana.org/assignments/media-types/examples/">example</a></p>
+
+
+
+
+          
+        
+        
+        
+        <p><a href="http://www.iana.org/assignments/media-types/image/">image</a></p>
+
+
+
+
+          
+        
+        
+        
+        <p><a href="http://www.iana.org/assignments/media-types/message/">message</a></p>
+
+
+
+
+          
+        
+        
+        
+        <p><a href="http://www.iana.org/assignments/media-types/model/">model</a></p>
+
+
+
+
+          
+        
+        
+        
+        <p><a href="http://www.iana.org/assignments/media-types/multipart/">multipart</a></p>
+
+
+
+
+          
+        
+        
+        
+        <p><a href="http://www.iana.org/assignments/media-types/text/">text</a></p>
+
+
+
+
+          
+        
+        
+        
+        <p><a href="http://www.iana.org/assignments/media-types/video/">video</a><br>
+
+
+
+
+          </p>
+
+
+
+
+        </blockquote>
+
+
+
+
+
+      
+      
+      
+      <p>If you wish to register a Media Type with the IANA, please see the following for the online application:</p>
+
+
+
+
+
+ 
+      
+      
+      
+      <p><a href="http://www.iana.org/cgi-bin/mediatypes.pl">Application for registration of Media Types</a></p>
+
+
+
+
+
+      
+      
+      
+      <p><a href="http://www.iana.org/assignments/media-types-parameters">Other Media Type Parameters</a></p>
+
+
+
+
+
+        
+      
+      
+      
+      <p> 
+        </p>
+
+
+
+      
+      
+      
+      <hr align="center" noshade="noshade" size="1">
+        
+      
+      
+      
+      <div align="center"><font size="-1">Comments concerning the layout, construction 
+          and functionality of this site <br>
+
+
+
+
+          should be sent to <a href="mailto:webmaster&iana.org">webmaster&amp;iana.org</a>.</font> 
+        </div>
+
+
+
+
+        
+      
+      
+      
+      <p align="center"></p>
+
+
+
+
+        
+      
+      
+      
+      <p align="center"><font size="-1">Page updated 
+          2012-09-12
+          <br>
+
+
+
+
+          </font><font size="-2">(c) 1999-2001 The Internet Corporation for Assigned 
+          Names and Numbers</font> <font size="-2">All rights reserved.</font> 
+      </p>
+
+
+
+      </td>
+
+
+
+
+    </tr>
+
+
+
+
+  
+  
+  
+  
+  </tbody>
+</table>
+
+
+
+
+</center>
+
+
+
+
+
+
+
+</body></html>
