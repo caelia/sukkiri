@@ -54,6 +54,9 @@
 (define struct-spec01
   '(#f ((label "one" "string") (address "one" "string"))))
 
+(define struct-spec02
+  '(#f ((given-name "one" "string") (surname "one" "string") (email "zoma" "nref") (phone "zoma" "nref"))))
+
 (define union-members01
   '("simple-email" "some-words" "boolean"))
 
@@ -64,13 +67,22 @@
   (date->time date01))
 
 (define struct-instance01a
-  '((%TYPE . "email-address") (%ID . "email/jane-morgan")
+  '((%TYPE . "email-address") (%ID . "jane-morgan-work-email")
     (label . "Work") (address . "dr.jane.v.morgan@sea-creature-research.com")))
 
 (define struct-instance01b
   '("email-address" (%TYPE . ("sref" . "email-address"))
-    (%ID . ("sref" . "email/jane-morgan")) (label . ("string" . "Work"))
+    (%ID . ("sref" . "jane-morgan-work-email")) (label . ("string" . "Work"))
     (address . ("string" . "dr.jane.v.morgan@sea-creature-research.com"))))
+
+(define struct-instance02a
+  '((%TYPE . "email-address") (%ID . "jane-morgan") (%LABEL . "given-name & surname")
+    (given-name . "Jane") (surname . "Morgan") (email . "jane-morgan-work-email")))
+
+(define struct-instance02b
+  '("person" (%TYPE . ("sref" . "email-address")) (%ID . ("sref" . "jane-morgan"))
+    (%LABEL . ("sref" . "given-name & surname")) (given-name . ("string" . "Jane"))
+    (surname . ("string" . "Morgan")) (email . ("nref" . "jane-morgan-work-email"))))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -360,6 +372,13 @@
       "VN03.01: Email address - valid"
       struct-instance01b
       (d:validate "email-address" struct-instance01a))
+    (s:add-struct-type test-db "person" extensible: #f members: '((given-name "one" "string")
+                       (surname "one" "string") (email "zoma" "nref") (phone "zoma" "nref")))
+    (d:load-struct-type-validator test-db "person")
+    (test
+      "VN03.02: Person - valid"
+      struct-instance02b
+      (d:validate "person" struct-instance02a))
     (reset-comparator)
               ))
 

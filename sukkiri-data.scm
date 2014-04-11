@@ -214,6 +214,8 @@
              (loop (cdr input) (cons valid output)))))))
 
 (define (validate-struct-member memspec mem)
+  ; (log-obj "validate-struct-member:memspec" memspec)
+  ; (log-obj "validate-struct-member:mem" mem)
   (let* ((rel-name (car memspec))
          (cardinality (cadr memspec))
          (mem-type (caddr memspec))
