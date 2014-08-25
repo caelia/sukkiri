@@ -1,7 +1,0 @@
-Sukkiri
-=======
-
-Sukkiri is a metadata server based on Redis, which may or may not ultimately
-be RDF-compliant. Sukkiri is a Japanese word that must be experienced to be
-completely understood, but means something like either clear, clean, neat,
-or refreshing.
