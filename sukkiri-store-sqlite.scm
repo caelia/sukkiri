@@ -17,6 +17,8 @@
         (use srfi-19-period)
         (use sukkiri-base)
 
+        (include "sukkiri-common-sql.scm")
+
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  CURRENT DATABASE  ------------------------------------------------
 
@@ -104,9 +106,6 @@
     (string->symbol typespec)
     '(integer float boolean string date time period nref rref xref sref)))
 
-(define (not-implemented . args)
-  (error "Not implemented."))
-
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
@@ -114,8 +113,34 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  DATABASE SETUP  --------------------------------------------------
 
-;; FILENAME -> ()
-(define create-db (make-parameter not-implemented))
+(define (create-db filename)
+  (let* ((db
+          (open-database filename))
+         (qx
+          (lambda (q)
+            (let ((s (sql/transient db q)))
+              (exec s)))))
+    (for-each
+      qx
+      `(,create-primitive-table-query
+        ,create-string-type-table-query
+        ,create-number-type-table-query
+        ,create-vocab-table-query
+        ,create-cardinality-table-query
+        ,create-struct-type-table-query
+        ,create-type-class-table-query
+        ,create-types-table-query
+        ,create-union-type-table-query
+        ,create-struct-members-table-query
+        ,create-statement-table-query))
+    (for-each
+      (lambda (qlist) (for-each qx qlist))
+      `(,populate-primitive-table-queries
+        ,populate-cardinality-table-queries
+        ,populate-type-class-table-queries
+        ,populate-types-table-queries
+        ,populate-union-type-table-queries))
+    (close-database db)))
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
@@ -123,26 +148,63 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  USER-DEFINED TYPE MANAGEMENT  ------------------------------------
 
-;; DATABASE -> ()
-(define begin-transaction (make-parameter not-implemented))
+(define (begin-transaction db)
+  (let ((st (sql/transient db "BEGIN TRANSACTION;")))
+    (exec st)))
 
-;; DATABASE/FILE -> PROC -> ()
-(define do-query (make-parameter not-implemented))
+(define (do-query db/file f)
+  (let* ((db-obj? (not (string? db/file)))
+         (db (if db-obj? db/file (open-database db/file))))
+    (if db-obj?
+      (f db)
+      (begin
+        (handle-exceptions
+          exn
+          (lambda (exn) (rollback db) (close-database db) (abort exn))
+          (begin-transaction db)
+          (f db)
+          (commit db))
+        (close-database db)))))
 
-;; DATABASE -> TYPENAME -> TYPECLASS -> ()
-(define add-general-type (make-parameter not-implemented))
+(define (add-general-type db name class)
+  (let ((st (sql/transient db add-type-query)))
+    (exec st name class))
+  (unless (string=? class "union")
+    (update-union-type db "any" members+: `(,name))))
 
-;; DATABASE -> TYPENAME -> [UNION?] -> ()
-(define delete-general-type (make-parameter not-implemented))
+(define (delete-general-type db name #!optional (union? #f))
+  (let ((st (sql/transient delete-type-query)))
+    (exec st name))
+  (unless union?
+    (update-union-type db "any" members-: `(,name))))
 
-;; DATABASE/FILE -> TYPENAME -> PATTERN -> [DESCRIPTION] -> ()
-(define add-string-type (make-parameter not-implemented))
+(define (add-string-type db/file name pattern #!optional (description '()))
+  (do-query
+    db/file
+    (lambda (db)
+      (let ((st (sql/transient db add-string-type-query)))
+        (exec st name pattern description))
+      (add-general-type db name "string"))))
 
-;; DATABASE/FILE -> TYPENAME -> {MINVAL} -> {MAXVAL} -> {STEP} -> {DIGITS} -> {DESCRIPTION} -> ()
-(define add-number-type (make-parameter not-implemented))
+(define (add-number-type db/file name #!key (minval '()) (maxval '())
+                                            (step '()) (digits '())
+                                            (description '()))
+  (do-query
+    db/file
+    (lambda (db)
+      (let ((st (sql/transient db add-number-type-query)))
+        (exec st name minval maxval step digits description))
+      (add-general-type db name "number"))))
 
-;; DATABASE/FILE -> TYPENAME -> TERMS -> ()
-(define add-vocab-type (make-parameter not-implemented))
+(define (add-vocab-type db/file name terms)
+  (do-query
+    db/file
+    (lambda (db)
+      (let ((st (sql db add-vocab-type-term-query)))
+        (for-each
+          (lambda (term) (exec st name term))
+          terms))
+      (add-general-type db name "vocab"))))
 
 (define (add-struct-type db/file name #!key (extensible #t) (members '())
                                             (description '()))
@@ -398,113 +460,6 @@
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  STATEMENT MANIPULATION  ------------------------------------------
-
-;;; ------  Queries  -------------------------------------------------------
-
-(define add-statement-query
-  "INSERT INTO statements (s, p, o, t) VALUES (?, ?, ?, ?);")
-
-(define delete-statements-s-query
-  "DELETE FROM statements WHERE s = ?;")
-
-(define delete-statements-p-query
-  "DELETE FROM statements WHERE p = ?;")
-
-(define delete-statements-o-query
-  "DELETE FROM statements WHERE o = ?;")
-
-(define delete-statements-t-query
-  "DELETE FROM statements WHERE t = ?;")
-
-(define delete-statements-sp-query
-  "DELETE FROM statements WHERE s = ? AND p = ?;")
-
-(define delete-statements-so-query
-  "DELETE FROM statements WHERE s = ? AND o = ?;")
-
-(define delete-statements-st-query
-  "DELETE FROM statements WHERE s = ? AND t = ?;")
-
-(define delete-statements-po-query
-  "DELETE FROM statements WHERE p = ? AND o = ?;")
-
-(define delete-statements-pt-query
-  "DELETE FROM statements WHERE p = ? AND t = ?;")
-
-(define delete-statements-spo-query
-  "DELETE FROM statements WHERE s = ? AND p = ? AND o = ?;")
-
-(define delete-statements-spt-query
-  "DELETE FROM statements WHERE s = ? AND p = ? AND t = ?;")
-
-(define update-statement-object-query
-  "UPDATE statements SET o = ?, t = ?, dt = datetime('now')  WHERE s = ? AND p = ? AND o = ?;")
-
-(define exists-s-query
-  "EXISTS (SELECT id FROM statements WHERE s = ?);") 
-
-(define exists-p-query
-  "EXISTS (SELECT id FROM statements WHERE p = ?);") 
-
-(define exists-o-query
-  "EXISTS (SELECT id FROM statements WHERE o = ?);") 
-
-(define exists-t-query
-  "EXISTS (SELECT id FROM statements WHERE t = ?);") 
-
-(define exists-sp-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ?);") 
-
-(define exists-so-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND o = ?);") 
-
-(define exists-st-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND t = ?);") 
-
-(define exists-po-query
-  "EXISTS (SELECT id FROM statements WHERE p = ? AND o = ?);") 
-
-(define exists-pt-query
-  "EXISTS (SELECT id FROM statements WHERE p = ? AND t = ?);") 
-
-(define exists-spo-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ? AND o = ?);") 
-
-(define exists-spt-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ? AND t = ?);") 
-
-(define get-statements-s-query
-  "SELECT s, p, o, t FROM statements WHERE s = ?;")
-
-(define get-statements-p-query
-  "SELECT s, p, o, t FROM statements WHERE p = ?;")
-
-(define get-statements-o-query
-  "SELECT s, p, o, t FROM statements WHERE o = ?;")
-
-(define get-statements-t-query
-  "SELECT s, p, o, t FROM statements WHERE t = ?;")
-
-(define get-statements-sp-query
-  "SELECT s, p, o, t FROM statements WHERE s = ? AND p = ?;")
-
-(define get-statements-so-query
-  "SELECT s, p, o, t FROM statements WHERE s = ? AND o = ?;")
-
-(define get-statements-st-query
-  "SELECT s, p, o, t FROM statements WHERE s = ? AND t = ?;")
-
-(define get-statements-po-query
-  "SELECT s, p, o, t FROM statements WHERE p = ? AND o = ?;")
-
-(define get-statements-pt-query
-  "SELECT s, p, o, t FROM statements WHERE p = ? AND t = ?;")
-
-(define get-statements-spt-query
-  "SELECT s, p, o, t FROM statements WHERE s = ? AND p = ? AND t = ?;")
-
-;;; ========================================================================
-;;; ------  Functions  -----------------------------------------------------
 
 (define (add-statement db/file s p o t)
   (do-query
