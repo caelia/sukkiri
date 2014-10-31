@@ -123,12 +123,12 @@
            `(,type-name . ,s)))))
 
 (define (load-string-type-validator db/file type-name)
-  (let* ((pattern (get-string-type db/file type-name))
+  (let* ((pattern ((get-string-type) db/file type-name))
          (val (make-string-type-validator type-name pattern)))
     (hash-table-set! validators type-name val)))
 
 (define (load-string-type-validators db/file)
-  (let ((string-types (get-string-types db/file)))
+  (let ((string-types ((get-string-types) db/file)))
     (for-each
       (lambda (t) (load-string-type-validator db/file t))
       string-types)))
@@ -153,12 +153,12 @@
            `(,type-name . ,x)))))
 
 (define (load-number-type-validator db/file type-name)
-  (let* ((typespec (get-number-type db/file type-name))
+  (let* ((typespec ((get-number-type) db/file type-name))
          (val (make-number-type-validator type-name typespec)))
     (hash-table-set! validators type-name val)))
 
 (define (load-number-type-validators db/file)
-  (let ((number-types (get-number-types db/file)))
+  (let ((number-types ((get-number-types) db/file)))
     (for-each
       (lambda (t) (load-number-type-validator db/file t))
       number-types)))
@@ -173,12 +173,12 @@
            `(,type-name . ,x)))))
 
 (define (load-vocab-type-validator db/file type-name)
-  (let* ((terms (get-vocab-type db/file type-name))
+  (let* ((terms ((get-vocab-type) db/file type-name))
          (val (make-vocab-type-validator type-name terms)))
     (hash-table-set! validators type-name val)))
 
 (define (load-vocab-type-validators db/file)
-  (let ((vocab-types (get-vocab-types db/file)))
+  (let ((vocab-types ((get-vocab-types) db/file)))
     (for-each
       (lambda (t) (load-vocab-type-validator db/file t))
       vocab-types)))
@@ -264,12 +264,12 @@
                  `(,type-name ,@smems ,@members-valid))))))))
 
 (define (load-struct-type-validator db/file type-name)
-  (let* ((typespec (get-struct-type db/file type-name))
+  (let* ((typespec ((get-struct-type) db/file type-name))
          (val (make-struct-type-validator type-name typespec)))
     (hash-table-set! validators type-name val)))
 
 (define (load-struct-type-validators db/file)
-  (let ((struct-types (get-struct-types db/file)))
+  (let ((struct-types ((get-struct-types) db/file)))
     (for-each
       (lambda (t) (load-struct-type-validator db/file t))
       struct-types)))
@@ -286,12 +286,12 @@
                (loop (cdr members*)))))))
 
 (define (load-union-type-validator db/file type-name)
-  (let* ((members (get-union-type db/file type-name))
+  (let* ((members ((get-union-type) db/file type-name))
          (val (make-union-type-validator members)))
     (hash-table-set! validators type-name val)))
 
 (define (load-union-type-validators db/file)
-  (let ((union-types (get-union-types db/file)))
+  (let ((union-types ((get-union-types) db/file)))
     (for-each
       (lambda (t) (load-union-type-validator db/file t))
       union-types)))

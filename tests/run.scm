@@ -1,6 +1,7 @@
 ;;; Unit tests for Sukkiri egg
 
 (use (prefix sukkiri-store s:))
+(use (prefix sukkiri-store-sqlite q:))
 (use (prefix sukkiri-data d:))
 (use (prefix sukkiri-ajax a:))
 (use srfi-1)
@@ -11,9 +12,10 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  GLOBAL SUPPORT PROCEDURES  ---------------------------------------
 
+(define %test-db% (make-parameter #f))
+
 (define (create-test-db)
-  (s:%db-file% "test.db")
-  (s:create-db "test.db")
+  (%test-db% (q:init-store "test.db"))
   (s:connect))
 
 (define (cleanup-db)

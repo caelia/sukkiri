@@ -1,10 +1,11 @@
-;;; sukkiri-store.scm -- SQLite3 interface for Sukkiri.
+;;; sukkiri-store-sqlite.scm -- SQLite3 implementation for Sukkiri database layer
 ;;;   Copyright © 2014 by Matthew C. Gushee <matt@gushee.net>
 ;;;   This program is open-source software, released under the GNU General
 ;;;   Public License v3. See the accompanying LICENSE file for details.
 
-(module sukkiri-store
-        *
+(module sukkiri-store-sqlite
+        (init-store)
+
         (import scheme chicken)
         (import extras)
         (import files)
@@ -16,6 +17,7 @@
         (use srfi-19)
         (use srfi-19-period)
         (use sukkiri-base)
+        (use sukkiri-store)
 
         (include "sukkiri-common-sql.scm")
 
@@ -113,7 +115,7 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  DATABASE SETUP  --------------------------------------------------
 
-(define (create-db filename)
+(define (@create-db filename)
   (let* ((db
           (open-database filename))
          (qx
@@ -148,11 +150,11 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  USER-DEFINED TYPE MANAGEMENT  ------------------------------------
 
-(define (begin-transaction db)
+(define (@begin-transaction db)
   (let ((st (sql/transient db "BEGIN TRANSACTION;")))
     (exec st)))
 
-(define (do-query db/file f)
+(define (@do-query db/file f)
   (let* ((db-obj? (not (string? db/file)))
          (db (if db-obj? db/file (open-database db/file))))
     (if db-obj?
@@ -166,19 +168,19 @@
           (commit db))
         (close-database db)))))
 
-(define (add-general-type db name class)
+(define (@add-general-type db name class)
   (let ((st (sql/transient db add-type-query)))
     (exec st name class))
   (unless (string=? class "union")
     (update-union-type db "any" members+: `(,name))))
 
-(define (delete-general-type db name #!optional (union? #f))
+(define (@delete-general-type db name #!optional (union? #f))
   (let ((st (sql/transient delete-type-query)))
     (exec st name))
   (unless union?
     (update-union-type db "any" members-: `(,name))))
 
-(define (add-string-type db/file name pattern #!optional (description '()))
+(define (@add-string-type db/file name pattern #!optional (description '()))
   (do-query
     db/file
     (lambda (db)
@@ -186,9 +188,9 @@
         (exec st name pattern description))
       (add-general-type db name "string"))))
 
-(define (add-number-type db/file name #!key (minval '()) (maxval '())
-                                            (step '()) (digits '())
-                                            (description '()))
+(define (@add-number-type db/file name #!key (minval '()) (maxval '())
+                                             (step '()) (digits '())
+                                             (description '()))
   (do-query
     db/file
     (lambda (db)
@@ -196,7 +198,7 @@
         (exec st name minval maxval step digits description))
       (add-general-type db name "number"))))
 
-(define (add-vocab-type db/file name terms)
+(define (@add-vocab-type db/file name terms)
   (do-query
     db/file
     (lambda (db)
@@ -206,7 +208,7 @@
           terms))
       (add-general-type db name "vocab"))))
 
-(define (add-struct-type db/file name #!key (extensible #t) (members '())
+(define (@add-struct-type db/file name #!key (extensible #t) (members '())
                                             (description '()))
   (do-query
     db/file
@@ -220,7 +222,7 @@
           members))
         (add-general-type db name "struct"))))
 
-(define (add-union-type db/file name members)
+(define (@add-union-type db/file name members)
   (do-query
     db/file
     (lambda (db)
@@ -230,14 +232,14 @@
           members))
       (add-general-type db name "union"))))
 
-(define (update-string-type db/file name pattern)
+(define (@update-string-type db/file name pattern)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db update-string-type-query)))
         (exec st pattern name)))))
 
-(define (update-number-type db/file name #!key (minval #f) (maxval #f)
+(define (@update-number-type db/file name #!key (minval #f) (maxval #f)
                                                (step #f) (digits #f))
   (do-query
     db/file
@@ -251,7 +253,7 @@
              (digits* (or digits (alist-ref 'digits current-vals))))
         (exec st-update minval* maxval* step* digits* name)))))
 
-(define (update-vocab-type db/file name #!key (terms+ '()) (terms- '()))
+(define (@update-vocab-type db/file name #!key (terms+ '()) (terms- '()))
   (do-query
     db/file
     (lambda (db)
@@ -264,7 +266,7 @@
           (lambda (term) (exec st-del name term))
           terms-)))))
 
-(define (update-struct-type db/file name #!key (extensible #t) (members+ '())
+(define (@update-struct-type db/file name #!key (extensible #t) (members+ '())
                                                (members- '()) (members* '()))
   (do-query
     db/file
@@ -299,7 +301,7 @@
               (exec st-upd rel-name* cardinality* mem-type* name rel-name)))
           members*)))))
 
-(define (update-union-type db/file name #!key (members+ '()) (members- '()))
+(define (@update-union-type db/file name #!key (members+ '()) (members- '()))
   (do-query
     db/file
     (lambda (db)
@@ -312,7 +314,7 @@
           (lambda (mem) (exec st-del name mem))
           members-)))))
 
-(define (delete-string-type db/file name)
+(define (@delete-string-type db/file name)
   (do-query
     db/file
     (lambda (db)
@@ -320,7 +322,7 @@
         (exec st name))
       (delete-general-type db name))))
 
-(define (delete-number-type db/file name)
+(define (@delete-number-type db/file name)
   (do-query
     db/file
     (lambda (db)
@@ -328,7 +330,7 @@
         (exec st name))
       (delete-general-type db name))))
 
-(define (delete-vocab-type db/file name)
+(define (@delete-vocab-type db/file name)
   (do-query
     db/file
     (lambda (db)
@@ -336,7 +338,7 @@
         (exec st name))
       (delete-general-type db name)))) 
 
-(define (delete-struct-type db/file name)
+(define (@delete-struct-type db/file name)
   (do-query
     db/file
     (lambda (db)
@@ -346,7 +348,7 @@
         (exec st-main name))
       (delete-general-type db name))))
 
-(define (delete-union-type db/file name)
+(define (@delete-union-type db/file name)
   (do-query
     db/file
     (lambda (db)
@@ -354,28 +356,28 @@
         (exec st name))
       (delete-general-type db name #t))))
 
-(define (get-string-type db/file name)
+(define (@get-string-type db/file name)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db get-string-type-query)))
         (query fetch-value st name)))))
 
-(define (get-number-type db/file name)
+(define (@get-number-type db/file name)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db get-number-type-query)))
         (query fetch-alist st name)))))
 
-(define (get-vocab-type db/file name)
+(define (@get-vocab-type db/file name)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db get-vocab-terms-query)))
         (query fetch-column st name)))))
 
-(define (get-struct-type db/file name)
+(define (@get-struct-type db/file name)
   (do-query
     db/file
     (lambda (db)
@@ -392,56 +394,56 @@
                  memspecs*)))
         `(,extensible ,memspecs)))))
 
-(define (get-union-type db/file name)
+(define (@get-union-type db/file name)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db get-union-type-members-query)))
         (query fetch-column st name)))))
 
-(define (get-string-types db/file)
+(define (@get-string-types db/file)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db get-string-types-query)))
         (query fetch-column st)))))
 
-(define (get-number-types db/file)
+(define (@get-number-types db/file)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db get-number-types-query)))
         (query fetch-column st)))))
 
-(define (get-vocab-types db/file)
+(define (@get-vocab-types db/file)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db get-vocab-types-query)))
         (query fetch-column st)))))
 
-(define (get-struct-types db/file)
+(define (@get-struct-types db/file)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db get-struct-types-query)))
         (query fetch-column st)))))
 
-(define (get-union-types db/file)
+(define (@get-union-types db/file)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db get-union-types-query)))
         (query fetch-column st)))))
 
-(define (get-type-class db/file name)
+(define (@get-type-class db/file name)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db get-type-class-query)))
         (fetch-value st name)))))
 
-(define (get-type db/file name)
+(define (@get-type db/file name)
   (do-query
     db/file
     (lambda (db)
@@ -461,14 +463,14 @@
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  STATEMENT MANIPULATION  ------------------------------------------
 
-(define (add-statement db/file s p o t)
+(define (@add-statement db/file s p o t)
   (do-query
     db/file
     (lambda (db)
       (let ((st-add (sql/transient db add-statement-query)))
         (exec st-add s p o t)))))
 
-(define (add-statements db/file sts)
+(define (@add-statements db/file sts)
   (do-query
     db/file
     (lambda (db)
@@ -483,7 +485,7 @@
                 (exec st-add s p o t))))
           sts)))))
 
-(define (delete-statements db/file #!key (s #f) (st #f) (p #f) (o #f) (t #f))
+(define (@delete-statements db/file #!key (s #f) (st #f) (p #f) (o #f) (t #f))
   (let-values (((q-del params)
                   (cond
                     ((and s p o) (<< delete-statements-spo-query `(,s ,p ,o)))
@@ -504,14 +506,14 @@
         (let ((st-del (sql/transient db q-del)))
           (apply exec `(,st-del ,@params)))))))
 
-(define (update-statement-object db/file s p o)
+(define (@update-statement-object db/file s p o)
   (do-query
     db/file
     (lambda (db)
       (let ((st (sql/transient db update-statement-object-query)))
         (exec st s p o)))))
 
-(define (statement-exists? db/file #!key (s #f) (p #f) (o #f) (t #f))
+(define (@statement-exists? db/file #!key (s #f) (p #f) (o #f) (t #f))
   (let-values (((q-ex params)
                   (cond
                     ((and s p o) (<< exists-spo-query `(,s ,p ,o)))
@@ -548,7 +550,7 @@
              (else raw-object))))
     `((s . ,subject) (p . ,prop) (o . ,object))))
 
-(define (get-statements db/file #!key (s #f) (p #f) (o #f) (t #f))
+(define (@get-statements db/file #!key (s #f) (p #f) (o #f) (t #f))
   (let-values (((q-get params)
                 (cond
                   ((and s p t) (<< get-statements-spt-query `(,s ,p ,t)))
@@ -572,60 +574,75 @@
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
 
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; ----  HIGH-LEVEL INTERFACE  --------------------------------------------
+(define (init-store filename #!key (create #t) (overwrite #f))
+  (create-db @create-db)
+  (begin-transaction @begin-transaction)
+  (do-query @do-query)
+  (add-general-type @add-general-type)
+  (delete-general-type @delete-general-type)
+  (add-string-type @add-string-type)
+  (add-number-type @add-number-type)
+  (add-vocab-type @add-vocab-type)
+  (add-struct-type @add-struct-type)
+  (add-union-type @add-union-type)
+  (update-string-type @update-string-type)
+  (update-number-type @update-number-type)
+  (update-vocab-type @update-vocab-type)
+  (update-struct-type @update-struct-type)
+  (update-union-type @update-union-type)
+  (delete-string-type @delete-string-type)
+  (delete-number-type @delete-number-type)
+  (delete-vocab-type @delete-vocab-type)
+  (delete-struct-type @delete-struct-type)
+  (delete-union-type @delete-union-type)
+  (get-string-type @get-string-type)
+  (get-number-type @get-number-type)
+  (get-vocab-type @get-vocab-type)
+  (get-struct-type @get-struct-type)
+  (get-union-type @get-union-type)
+  (get-string-types @get-string-types)
+  (get-number-types @get-number-types)
+  (get-vocab-types @get-vocab-types)
+  (get-struct-types @get-struct-types)
+  (get-union-types @get-union-types)
+  (get-type-class @get-type-class)
+  (get-type @get-type)
+  (add-statement @add-statement)
+  (add-statements @add-statements)
+  (delete-statements @delete-statements)
+  (update-statement-object @update-statement-object)
+  (statement-exists? @statement-exists?)
+  (get-statements @get-statements)
 
-(define (prepare-object db/file type obj)
-  (let ((class (get-type-class db/file type)))
+  (%db-file% filename)
+
+  (and
     (cond
-      ((equal? type "boolean") (values type (boolean->db obj)))
-      ((equal? type "date") (values type (date->db obj)))
-      ((equal? type "time") (values type (time->db obj)))
-      ((equal? type "period") (values type (period->db obj)))
-      ((equal? class "struct") (values "nref" (add-struct db/file obj)))
-      (else (values type obj)))))
- 
-(define (flatten-list-objects db/file str)
-  (let loop ((stmts-in str) (stmts-out '()))
-    (if (null? stmts-in)
-      stmts-out
-      (let ((p (caar stmts-in))
-            (o (cdar stmts-in)))
-        (if (list? o)
-          (loop
-            (cdr stmts-in)
-            (append stmts-out
-              (map (lambda (o*) `(,p . ,o*)) o)))
-          (loop
-            (cdr stmts-in)
-            (cons `(,p . ,o) stmts-out)))))))
-
-(define (add-struct db/file str)
-  (let ((id (alist-ref '%ID str))
-        (type (alist-ref '%TYPE str))
-        (members
-          (remove
-            (lambda (elt) (eqv? (car elt) '%ID))
-            str)))
-    (add-statements db/file (map (lambda (m) (cons id m)) members))))
-
-(define (get-struct db/file id)
-  (let ((statements (get-statements db/file s: id)))
-    (cons
-      `(%ID . ,id) 
-      (map
-        (lambda (elt)
-          `(,(alist-ref 'p elt) . ,(alist-ref 'o elt)))
-        statements))))
-
-(define (init-store filespec #!optional (replace #f))
-  (%db-file% filespec)
-  (when replace
-    (delete-file* filespec))
-  (unless (file-exists? filespec)
-    (create-db filespec)))
-
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+      ((and create (not (file-exists? filename)))
+        (@create-db filename)
+        #t)
+      ((and create overwrite (file-exists? filename))
+        (delete-file filename)
+        (@create-db filename)
+        #t)
+      ((file-exists? filename)
+        #t)
+      (else
+        #f))
+    (let ((connection #f))
+      (lambda (cmd . args)
+        (case cmd
+          ((connect)
+           (set! connection (open-database filename))
+           connection)
+          ((disconnect) 
+           (when connection
+             (close-database connection)
+             (set! connection #f)))
+          ((delete)
+           (when connection
+             (close-database connection))
+           (delete-file* filename)))))))
 
 ) ; END MODULE
 
@@ -636,4 +653,3 @@
 
 ;;; ========================================================================
 ;;; ------------------------------------------------------------------------
-
