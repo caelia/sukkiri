@@ -161,140 +161,140 @@
 ;;; ----  USER-DEFINED TYPE MANAGEMENT  ------------------------------------
 
 (define add-string-type-query
-  "INSERT INTO string_types (name, pattern, description) VALUES (?, ?, ?);")
+  "INSERT INTO string_types (name, pattern, description) VALUES ($1, $2, $3);")
 
 (define add-number-type-query
   "INSERT INTO number_types (name, minval, maxval, step, digits, description)
-   VALUES (?, ?, ?, ?, ?, ?);")
+   VALUES ($1, $2, $3, $4, $5, $6);")
 
 (define add-vocab-type-term-query
-  "INSERT INTO vocab_types (name, term) VALUES (?, ?);")
-
+  "INSERT INTO vocab_types (name, term) VALUES ($1, $2);")
+    "company")
 (define add-struct-type-query
-  "INSERT INTO struct_types (name, extensible, description) VALUES (?, ?, ?);")
+  "INSERT INTO struct_types (name, extensible, description) VALUES ($1, $2, $3);")
 
 (define add-struct-member-query
   "INSERT INTO struct_type_members (struct_type, rel_name, cardinality, mem_type)
-    SELECT struct_types.id, ?, cardinalities.id, types.id
+    SELECT struct_types.id, $1, cardinalities.id, types.id
     FROM struct_types, cardinalities, types
-    WHERE struct_types.name = ?  AND cardinalities.name = ? AND types.name = ?;")
+    WHERE struct_types.name = $2  AND cardinalities.name = $3 AND types.name = $4;")
 
 (define add-union-type-member-query
   "INSERT INTO union_types (name, member_type)
-    SELECT ?, id FROM types WHERE types.name = ?;")
+    SELECT $1, id FROM types WHERE types.name = $2;")
 
 (define add-type-query
   "INSERT INTO types (name, class)
-    SELECT ?, id FROM type_classes WHERE type_classes.name = ?;")
+    SELECT $1, id FROM type_classes WHERE type_classes.name = $2;")
 
 (define update-string-type-query
-  "UPDATE string_types SET pattern = ? WHERE name = ?;")
+  "UPDATE string_types SET pattern = $1 WHERE name = $2;")
 
 (define update-number-type-query
-  "UPDATE number_types SET minval = ?, maxval = ?, step = ?, digits = ?
-   WHERE name = ?;")
+  "UPDATE number_types SET minval = $1, maxval = $2, step = $3, digits = $4
+   WHERE name = $5;")
 
 (define update-number-type-min-query
-  "UPDATE number_types SET minval = ? WHERE name = ?;")
+  "UPDATE number_types SET minval = $1 WHERE name = $2;")
 
 (define update-number-type-max-query
-  "UPDATE number_types SET maxval = ? WHERE name = ?;")
+  "UPDATE number_types SET maxval = $1 WHERE name = $2;")
 
 (define update-number-type-step-query
-  "UPDATE number_types SET step = ? WHERE name = ?;")
+  "UPDATE number_types SET step = $1 WHERE name = $2;")
 
 (define update-number-type-digits-query
-  "UPDATE number_types SET digits = ? WHERE name = ?;")
+  "UPDATE number_types SET digits = $1 WHERE name = $2;")
 
 (define update-vocab-type-delete-term-query
-  "DELETE FROM vocab_types WHERE name = ? and term = ?;")
+  "DELETE FROM vocab_types WHERE name = $1 and term = $2;")
 
 (define update-struct-type-extensible-query
-  "UPDATE struct_types SET extensible = ? WHERE name = ?;")
+  "UPDATE struct_types SET extensible = $1 WHERE name = $2;")
 
 (define update-struct-type-description-query
-  "UPDATE struct_types SET description = ? WHERE name = ?;")
+  "UPDATE struct_types SET description = $1 WHERE name = $2;")
 
 (define update-struct-member-query
   "UPDATE struct_type_members
-   SET rel_name = ?, cardinality = ?, mem_type = ?
+   SET rel_name = $1, cardinality = $2, mem_type = $3
    WHERE struct_type = struct_types.id
-   AND struct_types.name = ? AND rel_name = ?;")
+   AND struct_types.name = $4 AND rel_name = $5;")
 
 (define update-struct-member-type-query
   "UPDATE struct_type_members SET mem_type = types.id
-   WHERE struct_type = struct_types.id AND struct_types.name = ?
-   AND rel_name = ? AND types.name = ?;")
+   WHERE struct_type = struct_types.id AND struct_types.name = $1
+   AND rel_name = $2 AND types.name = $3;")
 
 (define update-struct-member-cardinality-query
   "UPDATE struct_type_members SET cardinality = cardinalities.id
-   WHERE struct_type = struct_types.id AND struct_types.name = ?
-   AND rel_name = ? AND cardinalities.name = ?;")
+   WHERE struct_type = struct_types.id AND struct_types.name = $1
+   AND rel_name = $2 AND cardinalities.name = $3;")
 
 (define update-struct-member-relname-query
-  "UPDATE struct_type_members SET rel_name = ?
-   WHERE struct_type = struct_types.id AND struct_types.name = ?
-   AND rel_name = ?;")
+  "UPDATE struct_type_members SET rel_name = $1
+   WHERE struct_type = struct_types.id AND struct_types.name = $2
+   AND rel_name = $3;")
 
 (define update-union-type-delete-member-query
-  "DELETE FROM union_types WHERE name = ? and member_type = ?;")
+  "DELETE FROM union_types WHERE name = $1 and member_type = $2;")
 
 (define delete-string-type-query
-  "DELETE FROM string_types WHERE name = ?;")
+  "DELETE FROM string_types WHERE name = $1;")
 
 (define delete-number-type-query
-  "DELETE FROM number_types WHERE name = ?;")
+  "DELETE FROM number_types WHERE name = $1;")
 
 (define delete-vocab-type-query
-  "DELETE FROM vocab_types WHERE name = ?;")
+  "DELETE FROM vocab_types WHERE name = $1;")
 
 (define delete-struct-type-query
-  "DELETE FROM struct_types WHERE name = ?;")
+  "DELETE FROM struct_types WHERE name = $1;")
 
 (define delete-struct-member-query
   "DELETE FROM struct_type_members
-   WHERE struct_type = struct_types.id AND struct_type.name = ?
-   AND rel_name = ?;")
+   WHERE struct_type = struct_types.id AND struct_type.name = $1
+   AND rel_name = $2;")
 
 (define delete-struct-members-query
   "DELETE FROM struct_type_members
-   WHERE struct_type = struct_types.id AND struct_type.name = ?;")
+   WHERE struct_type = struct_types.id AND struct_type.name = $1;")
 
 (define delete-union-type-query
-  "DELETE FROM union_types WHERE name = ?;")
+  "DELETE FROM union_types WHERE name = $1;")
 
 (define delete-type-query
-  "DELETE FROM types WHERE name = ?;")
+  "DELETE FROM types WHERE name = $1;")
 
 (define get-string-type-query
-  "SELECT pattern FROM string_types WHERE name = ?;")
+  "SELECT pattern FROM string_types WHERE name = $1;")
 
 (define get-number-type-query
   "SELECT minval, maxval, step, digits
-   FROM number_types WHERE name = ?;")
+   FROM number_types WHERE name = $1;")
 
 (define get-vocab-terms-query
-  "SELECT term FROM vocab_types WHERE name = ?;")
+  "SELECT term FROM vocab_types WHERE name = $1;")
 
 (define get-struct-member-query
   "SELECT cardinality, mem_type FROM struct_type_members, struct_types
    WHERE struct_type = struct_types.id
-   AND struct_types.name = ? AND rel_name = ?;")
+   AND struct_types.name = $1 AND rel_name = $2;")
 
 (define get-struct-type-query
   "SELECT extensible, rel_name, cardinalities.name as cardinality, types.name as mem_type
     FROM struct_types, struct_type_members, cardinalities, types
-    WHERE struct_types.name = ?
+    WHERE struct_types.name = $1
       AND struct_type_members.struct_type = struct_types.id
       AND struct_type_members.cardinality = cardinalities.id
       AND struct_type_members.mem_type = types.id;")
 
 (define get-union-type-members-query
   "SELECT types.name FROM union_types, types
-    WHERE member_type = types.id AND union_types.name = ?;")
+    WHERE member_type = types.id AND union_types.name = $1;")
 
 (define get-type-class-query
-  "SELECT class FROM types WHERE name = ?;")
+  "SELECT class FROM types WHERE name = $1;")
 
 (define get-string-types-query
   "SELECT name FROM string_types;")
@@ -315,103 +315,103 @@
 ;;; ----  STATEMENT MANIPULATION  ------------------------------------------
 
 (define add-statement-query
-  "INSERT INTO statements (s, p, o, t) VALUES (?, ?, ?, ?);")
+  "INSERT INTO statements (s, p, o, t) VALUES ($1, $2, $3, $4);")
 
 (define delete-statements-s-query
-  "DELETE FROM statements WHERE s = ?;")
+  "DELETE FROM statements WHERE s = $1;")
 
 (define delete-statements-p-query
-  "DELETE FROM statements WHERE p = ?;")
+  "DELETE FROM statements WHERE p = $1;")
 
 (define delete-statements-o-query
-  "DELETE FROM statements WHERE o = ?;")
+  "DELETE FROM statements WHERE o = $1;")
 
 (define delete-statements-t-query
-  "DELETE FROM statements WHERE t = ?;")
+  "DELETE FROM statements WHERE t = $1;")
 
 (define delete-statements-sp-query
-  "DELETE FROM statements WHERE s = ? AND p = ?;")
+  "DELETE FROM statements WHERE s = $1 AND p = $2;")
 
 (define delete-statements-so-query
-  "DELETE FROM statements WHERE s = ? AND o = ?;")
+  "DELETE FROM statements WHERE s = $1 AND o = $2;")
 
 (define delete-statements-st-query
-  "DELETE FROM statements WHERE s = ? AND t = ?;")
+  "DELETE FROM statements WHERE s = $1 AND t = $2;")
 
 (define delete-statements-po-query
-  "DELETE FROM statements WHERE p = ? AND o = ?;")
+  "DELETE FROM statements WHERE p = $1 AND o = $2;")
 
 (define delete-statements-pt-query
-  "DELETE FROM statements WHERE p = ? AND t = ?;")
+  "DELETE FROM statements WHERE p = $1 AND t = $2;")
 
 (define delete-statements-spo-query
-  "DELETE FROM statements WHERE s = ? AND p = ? AND o = ?;")
+  "DELETE FROM statements WHERE s = $1 AND p = $2 AND o = $3;")
 
 (define delete-statements-spt-query
-  "DELETE FROM statements WHERE s = ? AND p = ? AND t = ?;")
+  "DELETE FROM statements WHERE s = $1 AND p = $2 AND t = $3;")
 
 (define update-statement-object-query
-  "UPDATE statements SET o = ?, t = ?, dt = datetime('now')  WHERE s = ? AND p = ? AND o = ?;")
+  "UPDATE statements SET o = $1, t = $2, dt = datetime('now')  WHERE s = $3 AND p = $4 AND o = $5;")
 
 (define exists-s-query
-  "EXISTS (SELECT id FROM statements WHERE s = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE s = $1);") 
 
 (define exists-p-query
-  "EXISTS (SELECT id FROM statements WHERE p = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE p = $1);") 
 
 (define exists-o-query
-  "EXISTS (SELECT id FROM statements WHERE o = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE o = $1);") 
 
 (define exists-t-query
-  "EXISTS (SELECT id FROM statements WHERE t = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE t = $1);") 
 
 (define exists-sp-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE s = $1 AND p = $2);") 
 
 (define exists-so-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND o = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE s = $1 AND o = $2);") 
 
 (define exists-st-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND t = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE s = $1 AND t = $2);") 
 
 (define exists-po-query
-  "EXISTS (SELECT id FROM statements WHERE p = ? AND o = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE p = $1 AND o = $2);") 
 
 (define exists-pt-query
-  "EXISTS (SELECT id FROM statements WHERE p = ? AND t = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE p = $1 AND t = $2);") 
 
 (define exists-spo-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ? AND o = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE s = $1 AND p = $2 AND o = $3);") 
 
 (define exists-spt-query
-  "EXISTS (SELECT id FROM statements WHERE s = ? AND p = ? AND t = ?);") 
+  "EXISTS (SELECT id FROM statements WHERE s = $1 AND p = $2 AND t = $3);") 
 
 (define get-statements-s-query
-  "SELECT s, p, o, t FROM statements WHERE s = ?;")
+  "SELECT s, p, o, t FROM statements WHERE s = $1;")
 
 (define get-statements-p-query
-  "SELECT s, p, o, t FROM statements WHERE p = ?;")
+  "SELECT s, p, o, t FROM statements WHERE p = $1;")
 
 (define get-statements-o-query
-  "SELECT s, p, o, t FROM statements WHERE o = ?;")
+  "SELECT s, p, o, t FROM statements WHERE o = $1;")
 
 (define get-statements-t-query
-  "SELECT s, p, o, t FROM statements WHERE t = ?;")
+  "SELECT s, p, o, t FROM statements WHERE t = $1;")
 
 (define get-statements-sp-query
-  "SELECT s, p, o, t FROM statements WHERE s = ? AND p = ?;")
+  "SELECT s, p, o, t FROM statements WHERE s = $1 AND p = $2;")
 
 (define get-statements-so-query
-  "SELECT s, p, o, t FROM statements WHERE s = ? AND o = ?;")
+  "SELECT s, p, o, t FROM statements WHERE s = $1 AND o = $2;")
 
 (define get-statements-st-query
-  "SELECT s, p, o, t FROM statements WHERE s = ? AND t = ?;")
+  "SELECT s, p, o, t FROM statements WHERE s = $1 AND t = $2;")
 
 (define get-statements-po-query
-  "SELECT s, p, o, t FROM statements WHERE p = ? AND o = ?;")
+  "SELECT s, p, o, t FROM statements WHERE p = $1 AND o = $2;")
 
 (define get-statements-pt-query
-  "SELECT s, p, o, t FROM statements WHERE p = ? AND t = ?;")
+  "SELECT s, p, o, t FROM statements WHERE p = $1 AND t = $2;")
 
 (define get-statements-spt-query
-  "SELECT s, p, o, t FROM statements WHERE s = ? AND p = ? AND t = ?;")
+  "SELECT s, p, o, t FROM statements WHERE s = $1 AND p = $2 AND t = $3;")
