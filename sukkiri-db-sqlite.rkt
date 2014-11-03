@@ -1,11 +1,15 @@
 #lang racket
 
-(require (rename-in db [disconnect db-disconnect]))
+(require (rename-in db
+                    [disconnect db-disconnect]
+                    [statement? db-statement?]))
 (require "sukkiri-db-sig.rkt")
 
 (define-unit sukkiri-db-sqlite@
   (import)
   (export sukkiri-db^)
+
+  (include "sukkiri-common-sql.rkt")
 
   (struct sukkiri-sqlite-db (file [connection #:mutable]))
 
