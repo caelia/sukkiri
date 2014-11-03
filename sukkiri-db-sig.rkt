@@ -8,11 +8,107 @@
 
 (define-signature sukkiri-db^
   ((contracted
+    ;; Type predicates
     [sukkiri-db? (-> any/c boolean?)]
+    [statement? (-> any/c boolean?)]
+    [type-spec? (-> any/c boolean?)]
+    [struct-member-spec? (-> any/c boolean?)]
+    [struct-type-spec? (-> any/c boolean?)]
+    [numeric-type-spec? (-> any/c boolean?)]
+
+    ;; General database manipulation
     ; Needs to be something like (-> connection-spec db)
-    [create (-> any/c sukkiri-db?)]
+    [create-db (-> any/c sukkiri-db?)]
     [connect (-> sukkiri-db? any)] 
-    [disconnect (-> sukkiri-db? any)])))
+    [disconnect (-> sukkiri-db? any)]
+    [begin-transaction (-> sukkiri-db? any)]
+    [commit (-> sukkiri-db? any)]
+    [rollback (-> sukkiri-db? any)]
+    [do-query (-> sukkiri-db? procedure? any)]
+    ; User-defined type management
+    [add-general-type (-> sukkiri-db? string? string? any)]
+    [delete-general-type (->* (sukkiri-db? string?) (#:union boolean?) any)]
+    [add-string-type (->* (sukkiri-db? string? string?) (#:description string?) any)]
+    [add-number-type (->* (sukkiri-db?
+                           string?)
+                          (#:minval number?
+                           #:maxval number?
+                           #:step number?
+                           #:digits integer?
+                           #:description string?)
+                          any)]
+    [add-vocab-type (-> sukkiri-db? string? (listof string?))]
+    [add-struct-type (->* (sukkiri-db?)
+                          (#:extensible boolean?
+                           #:members (listof struct-member-spec?)
+                           #:description string?)
+                          any)]
+    [add-union-type (-> sukkiri-db? string? (listof string?) any)]
+    [update-string-type (-> sukkiri-db? string? string? any)]
+    [update-number-type (->* (sukkiri-db?
+                              string?)
+                             (#:minval number?
+                              #:maxval number?
+                              #:step number?
+                              #:digits integer?)
+                             any)]
+    [update-vocab-type (->* (sukkiri-db? string?)
+                            (#:terms+ (listof string?) #:terms- (listof string?))
+                            any)]
+    [update-struct-type (->* (sukkiri-db?
+                              string?)
+                             (#:extensible boolean?
+                              #:members+ (listof struct-member-spec?)
+                              #:members- (listof string?)
+                              #:members* (listof struct-member-spec?))
+                             any)]
+    [update-union-type (->* (sukkiri-db?
+                             string?)
+                            (#:members+ (listof string?)
+                             #:members- (listof string?))
+                            any)]
+    [delete-string-type (-> sukkiri-db? string? any)]
+    [delete-number-type (-> sukkiri-db? string? any)]
+    [delete-vocab-type (-> sukkiri-db? string? any)]
+    [delete-struct-type (-> sukkiri-db? string? any)]
+    [delete-union-type (-> sukkiri-db? string? any)]
+    [get-string-type (-> sukkiri-db? string? string?)]
+    [get-number-type (-> sukkiri-db? string? numeric-type-spec?)]
+    [get-vocab-type (-> sukkiri-db? string? (listof string?))]
+    [get-struct-type (-> sukkiri-db? string? struct-type-spec?)]
+    [get-union-type (-> sukkiri-db? string? (listof string?))]
+    [get-string-types (-> sukkiri-db? (listof string?))]
+    [get-number-types (-> sukkiri-db? (listof string?))]
+    [get-vocab-types (-> sukkiri-db? (listof string?))]
+    [get-struct-types (-> sukkiri-db? (listof string?))]
+    [get-union-types (-> sukkiri-db? (listof string?))]
+    [get-type-class (-> sukkiri-db? string? string?)]
+    [get-type (-> sukkiri-db? string? type-spec?)]
+
+    ;; Statement manipulation
+    [add-statement (-> sukkiri-db? string? string? string? string? any)]
+    [add-statements (-> sukkiri-db? (listof statement?) any)]
+    ; DB/FILE -> {SUBJ} -> {SUBJ_TYPE} -> {PRED} -> {OBJ} -> {TYPE} -> ()
+    ; Wait: isn't that SUBJ_TYPE obsolete?
+    [delete-statements (->* (sukkiri-db?)
+                            (#:subj string?
+                             #:pred string?
+                             #:obj string?
+                             #:type string?)
+                            any)]
+    [update-statement-object (-> sukkiri-db? string? string? string? any)]
+    [statement-exists? (->* (sukkiri-db?)
+                            (#:subj string?
+                             #:pred string?
+                             #:obj string?
+                             #:type string?)
+                            boolean?)]
+    [get-statements (->* (sukkiri-db?)
+                         (#:subj string?
+                          #:pred string?
+                          #:obj string?
+                          #:type string?)
+                         (listof statement?))])))
 
 (provide sukkiri-db^)
 
@@ -88,134 +184,8 @@
 ; 
 ; ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 ; 
-; 
-; 
-; ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-; ;;; ----  DATABASE SETUP  --------------------------------------------------
-; 
-; ;; FILENAME -> ()
-; (define create-db (make-parameter not-implemented))
-; 
-; ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-; 
-; 
-; ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-; ;;; ----  USER-DEFINED TYPE MANAGEMENT  ------------------------------------
-; 
-; ;; DATABASE -> ()
-; (define begin-transaction (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> PROC -> ()
-; (define do-query (make-parameter not-implemented))
-; 
-; ;; DATABASE -> TYPENAME -> TYPECLASS -> ()
-; (define add-general-type (make-parameter not-implemented))
-; 
-; ;; DATABASE -> TYPENAME -> [UNION?] -> ()
-; (define delete-general-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> PATTERN -> [DESCRIPTION] -> ()
-; (define add-string-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> {MINVAL} -> {MAXVAL} -> {STEP} -> {DIGITS} -> {DESCRIPTION} -> ()
-; (define add-number-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> TERMS -> ()
-; (define add-vocab-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> {EXTENSIBLE} -> {MEMBERS} -> {DESCRIPTION} -> ()
-; (define add-struct-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> MEMBERS -> ()
-; (define add-union-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> PATTERN -> ()
-; (define update-string-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> {MINVAL} -> {MAXVAL} -> {STEP} -> {DIGITS} -> ()
-; (define update-number-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> {TERMS+} -> {TERMS-} -> ()
-; (define update-vocab-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> {EXTENSIBLE} -> {MEMBERS+} -> {MEMBERS-} -> {MEMBERS*} -> ()
-; (define update-struct-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME ->  {MEMBERS+} -> {MEMBERS-} -> ()
-; (define update-union-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> ()
-; (define delete-string-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> ()
-; (define delete-number-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> ()
-; (define delete-vocab-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> ()
-; (define delete-struct-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> ()
-; (define delete-union-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> PATTERN
-; (define get-string-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> TYPEDEF
-; (define get-number-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> MEMBERS
-; (define get-vocab-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> TYPEDEF
-; (define get-struct-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> MEMBERS
-; (define get-union-type (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> LIST
-; (define get-string-types (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> LIST
-; (define get-number-types (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> LIST
-; (define get-vocab-types (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> LIST
-; (define get-struct-types (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> LIST
-; (define get-union-types (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> CLASSNAME
-; (define get-type-class (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> TYPENAME -> TYPEDEF
-; (define get-type (make-parameter not-implemented))
-; 
-; ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-; 
-; 
 ; ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ; ;;; ----  STATEMENT MANIPULATION  ------------------------------------------
-; 
-; ;; DB/FILE -> SUBJ -> PRED -> OBJ -> TYPE -> ()
-; (define add-statement (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> STATEMENTS -> ()
-; (define add-statements (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> {SUBJ} -> {SUBJ_TYPE} -> {PRED} -> {OBJ} -> {TYPE} -> ()
-; ;; Wait: isn't that SUBJ_TYPE obsolete?
-; (define delete-statements (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> SUBJ -> PRED -> OBJ -> ()
-; (define update-statement-object (make-parameter not-implemented))
-; 
-; ;; DB/FILE -> {SUBJ} -> {PRED} -> {OBJ} -> {TYPE} -> BOOL
-; (define statement-exists? (make-parameter not-implemented))
 ; 
 ; ;; STATEMENT -> STATEMENT
 ; ;; Not sure this belongs in this section - isn't it higher-level?
@@ -235,9 +205,6 @@
 ;              (else raw-object))))
 ;     `((s . ,subject) (p . ,prop) (o . ,object))))
 ; 
-; ;; DB/FILE -> {SUBJ} -> {PRED} -> {OBJ} -> {TYPE} -> STATEMENTS
-; (define get-statements (make-parameter not-implemented))
-;       
 ; ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 ; 
 ; 
