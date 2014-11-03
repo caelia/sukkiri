@@ -15,7 +15,26 @@
     [struct-member-spec? (-> any/c boolean?)]
     [struct-type-spec? (-> any/c boolean?)]
     [numeric-type-spec? (-> any/c boolean?)]
+    [time-period? (-> any/c boolean?)]
+    [db-value? (-> any/c boolean?)]
 
+    ;; Type conversions
+    [db->integer (-> db-value? integer?)]
+    [db->float (-> db-value? flonum?)]
+    [db->string (-> db-value? string?)]
+    [db->boolean (-> db-value? boolean?)]
+    [db->date (-> db-value? date?)]
+    [db->time (-> db-value? time?)]
+    [db->period (-> db-value? time-period?)]
+    [integer->db (-> integer? db-value?)]
+    [float->db (-> flonum? db-value?)]
+    [string->db (-> string? db-value?)]
+    [boolean->db (-> boolean? db-value?)]
+    [date->db (-> date? db-value?)]
+    [time->db (-> time? db-value?)]
+    [period->db (-> time-period? db-value?)]
+    [object->ext-type (-> statement? statement?)] 
+  
     ;; General database manipulation
     ; Needs to be something like (-> connection-spec db)
     [create-db (-> any/c sukkiri-db?)]
@@ -121,45 +140,7 @@
 ; (define iso-format "~Y-~m-~dT~H:~M:~S")
 ; 
 ; (define << values)
-; 
-; (define db->integer string->number)
-; 
-; (define db->float string->number)
-; 
-; (define db->string identity)
-; 
-; (define (db->boolean dbval)
-;   (cond
-;     ((string=? dbval "0") #f)
-;     ((string=? dbval "1") #t)
-;     (else (eprintf "'~A' is not a boolean value" dbval))))
-; 
-; (define (db->date dbval)
-;   (string->date dbval iso-format))
-; 
-; (define (db->time dbval)
-;   (date->time (string->date dbval iso-format)))
-; 
-; (define db->period string->number)
-; 
-; (define integer->db number->string)
-; 
-; (define float->db number->string)
-; 
-; (define string->db identity)
-; 
-; (define (boolean->db b)
-;   (if b 1 0))
-; 
-; (define (date->db d)
-;   (date->string d iso-format))
-; 
-; (define (time->db t)
-;   (date->string (time->date t) iso-format))
-; 
-; ;; Currently a period is just a seconds value
-; (define period->db identity)
-; 
+;
 ; (define validate-integer integer?)
 ; 
 ; (define validate-float flonum?)
@@ -179,11 +160,9 @@
 ;     (string->symbol typespec)
 ;     '(integer float boolean string date time period nref rref xref sref)))
 ; 
-; (define (not-implemented . args)
-;   (error "Not implemented."))
-; 
 ; ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 ; 
+;
 ; ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ; ;;; ----  STATEMENT MANIPULATION  ------------------------------------------
 ; 
