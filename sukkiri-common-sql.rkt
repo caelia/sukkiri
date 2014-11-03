@@ -1,4 +1,4 @@
-;;; sukkiri-common-sql.scm -- SQL queries that work for all databases.
+;;; sukkiri-common-sql.rkt -- SQL queries that work for all databases.
 ;;;   Copyright © 2014 by Matthew C. Gushee <matt@gushee.net>
 ;;;   This program is open-source software, released under the BSD license.
 ;;;   See the accompanying LICENSE file for details.
