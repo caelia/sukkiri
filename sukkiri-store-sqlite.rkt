@@ -113,46 +113,11 @@
 
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-;;; ----  DATABASE SETUP  --------------------------------------------------
-
-(define (@create-db filename)
-  (let* ((db
-          (open-database filename))
-         (qx
-          (lambda (q)
-            (let ((s (sql/transient db q)))
-              (exec s)))))
-    (for-each
-      qx
-      `(,create-primitive-table-query
-        ,create-string-type-table-query
-        ,create-number-type-table-query
-        ,create-vocab-table-query
-        ,create-cardinality-table-query
-        ,create-struct-type-table-query
-        ,create-type-class-table-query
-        ,create-types-table-query
-        ,create-union-type-table-query
-        ,create-struct-members-table-query
-        ,create-statement-table-query))
-    (for-each
-      (lambda (qlist) (for-each qx qlist))
-      `(,populate-primitive-table-queries
-        ,populate-cardinality-table-queries
-        ,populate-type-class-table-queries
-        ,populate-types-table-queries
-        ,populate-union-type-table-queries))
-    (close-database db)))
-
-;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-
-;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ----  USER-DEFINED TYPE MANAGEMENT  ------------------------------------
 
 (define (@begin-transaction db)
-  (let ((st (sql/transient db "BEGIN TRANSACTION;")))
-    (exec st)))
+  (let ((ps (sql/transient db "BEGIN TRANSACTION;")))
+    (exec ps)))
 
 (define (@do-query db/file f)
   (let* ((db-obj? (not (string? db/file)))
@@ -162,30 +127,30 @@
       (begin
         (handle-exceptions
           exn
-          (lambda (exn) (rollback db) (close-database db) (abort exn))
+          (λ (exn) (rollback db) (close-database db) (abort exn))
           (begin-transaction db)
           (f db)
           (commit db))
         (close-database db)))))
 
 (define (@add-general-type db name class)
-  (let ((st (sql/transient db add-type-query)))
-    (exec st name class))
+  (let ((ps (sql/transient db add-type-query)))
+    (exec ps name class))
   (unless (string=? class "union")
     (update-union-type db "any" members+: `(,name))))
 
 (define (@delete-general-type db name #!optional (union? #f))
-  (let ((st (sql/transient delete-type-query)))
-    (exec st name))
+  (let ((ps (sql/transient delete-type-query)))
+    (exec ps name))
   (unless union?
     (update-union-type db "any" members-: `(,name))))
 
 (define (@add-string-type db/file name pattern #!optional (description '()))
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db add-string-type-query)))
-        (exec st name pattern description))
+    (λ (db)
+      (let ((ps (sql/transient db add-string-type-query)))
+        (exec ps name pattern description))
       (add-general-type db name "string"))))
 
 (define (@add-number-type db/file name #!key (minval '()) (maxval '())
@@ -193,18 +158,18 @@
                                              (description '()))
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db add-number-type-query)))
-        (exec st name minval maxval step digits description))
+    (λ (db)
+      (let ((ps (sql/transient db add-number-type-query)))
+        (exec ps name minval maxval step digits description))
       (add-general-type db name "number"))))
 
 (define (@add-vocab-type db/file name terms)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql db add-vocab-type-term-query)))
+    (λ (db)
+      (let ((ps (sql db add-vocab-type-term-query)))
         (for-each
-          (lambda (term) (exec st name term))
+          (λ (term) (exec ps name term))
           terms))
       (add-general-type db name "vocab"))))
 
@@ -212,12 +177,12 @@
                                             (description '()))
   (do-query
     db/file
-    (lambda (db)
+    (λ (db)
       (let ((st-main (sql/transient db add-struct-type-query))
             (st-mem (sql db add-struct-member-query)))
         (exec st-main name (if extensible 1 0) description)
         (for-each
-          (lambda (mem)
+          (λ (mem)
             (exec st-mem (symbol->string (car mem)) name (cadr mem) (caddr mem)))
           members))
         (add-general-type db name "struct"))))
@@ -225,25 +190,25 @@
 (define (@add-union-type db/file name members)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql db add-union-type-member-query)))
+    (λ (db)
+      (let ((ps (sql db add-union-type-member-query)))
         (for-each
-          (lambda (mem) (exec st name mem))
+          (λ (mem) (exec ps name mem))
           members))
       (add-general-type db name "union"))))
 
 (define (@update-string-type db/file name pattern)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db update-string-type-query)))
-        (exec st pattern name)))))
+    (λ (db)
+      (let ((ps (sql/transient db update-string-type-query)))
+        (exec ps pattern name)))))
 
 (define (@update-number-type db/file name #!key (minval #f) (maxval #f)
                                                (step #f) (digits #f))
   (do-query
     db/file
-    (lambda (db)
+    (λ (db)
       (let* ((st-current (sql/transient db get-number-type-query))
              (st-update (sql/transient db update-number-type-query))
              (current-vals (query fetch-alist st-current name))
@@ -256,21 +221,21 @@
 (define (@update-vocab-type db/file name #!key (terms+ '()) (terms- '()))
   (do-query
     db/file
-    (lambda (db)
+    (λ (db)
       (let ((st-add (sql db add-vocab-type-term-query))
             (st-del (sql db update-vocab-type-delete-term-query)))
         (for-each
-          (lambda (term) (exec st-add name term))
+          (λ (term) (exec st-add name term))
           terms+)
         (for-each
-          (lambda (term) (exec st-del name term))
+          (λ (term) (exec st-del name term))
           terms-)))))
 
 (define (@update-struct-type db/file name #!key (extensible #t) (members+ '())
                                                (members- '()) (members* '()))
   (do-query
     db/file
-    (lambda (db)
+    (λ (db)
       (let ((st-ext (sql/transient db update-struct-type-extensible-query))
             (st-add (sql db add-struct-member-query))
             (st-del (sql db delete-struct-member-query))
@@ -278,7 +243,7 @@
             (st-upd (sql db update-struct-member-query)))
         (exec st-ext extensible name)
         (for-each
-          (lambda (mem)
+          (λ (mem)
             (exec st-add
                   (alist-ref 'rel-name mem)
                   name
@@ -286,10 +251,10 @@
                   (alist-ref 'type mem)))
           members+)
         (for-each
-          (lambda (mem) (exec st-del name mem))
+          (λ (mem) (exec st-del name mem))
           members-)
         (for-each
-          (lambda (mem)
+          (λ (mem)
             (let* ((rel-name (alist-ref 'rel-name mem))
                    (current-values
                      (query fetch-alist st-current name rel-name))
@@ -304,44 +269,44 @@
 (define (@update-union-type db/file name #!key (members+ '()) (members- '()))
   (do-query
     db/file
-    (lambda (db)
+    (λ (db)
       (let ((st-add (sql db add-union-type-member-query))
             (st-del (sql db update-union-type-delete-member-query)))
         (for-each
-          (lambda (mem) (exec st-add name mem))
+          (λ (mem) (exec st-add name mem))
           members+)
         (for-each
-          (lambda (mem) (exec st-del name mem))
+          (λ (mem) (exec st-del name mem))
           members-)))))
 
 (define (@delete-string-type db/file name)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db delete-string-type-query)))
-        (exec st name))
+    (λ (db)
+      (let ((ps (sql/transient db delete-string-type-query)))
+        (exec ps name))
       (delete-general-type db name))))
 
 (define (@delete-number-type db/file name)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db delete-number-type-query)))
-        (exec st name))
+    (λ (db)
+      (let ((ps (sql/transient db delete-number-type-query)))
+        (exec ps name))
       (delete-general-type db name))))
 
 (define (@delete-vocab-type db/file name)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db delete-vocab-type-query)))
-        (exec st name))
+    (λ (db)
+      (let ((ps (sql/transient db delete-vocab-type-query)))
+        (exec ps name))
       (delete-general-type db name)))) 
 
 (define (@delete-struct-type db/file name)
   (do-query
     db/file
-    (lambda (db)
+    (λ (db)
       (let ((st-main (sql/transient db delete-struct-type-query))
             (st-mem (sql/transient db delete-struct-members-query)))
         (exec st-mem name)
@@ -351,44 +316,44 @@
 (define (@delete-union-type db/file name)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db delete-union-type-query)))
-        (exec st name))
+    (λ (db)
+      (let ((ps (sql/transient db delete-union-type-query)))
+        (exec ps name))
       (delete-general-type db name #t))))
 
 (define (@get-string-type db/file name)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db get-string-type-query)))
-        (query fetch-value st name)))))
+    (λ (db)
+      (let ((ps (sql/transient db get-string-type-query)))
+        (query fetch-value ps name)))))
 
 (define (@get-number-type db/file name)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db get-number-type-query)))
-        (query fetch-alist st name)))))
+    (λ (db)
+      (let ((ps (sql/transient db get-number-type-query)))
+        (query fetch-alist ps name)))))
 
 (define (@get-vocab-type db/file name)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db get-vocab-terms-query)))
-        (query fetch-column st name)))))
+    (λ (db)
+      (let ((ps (sql/transient db get-vocab-terms-query)))
+        (query fetch-column ps name)))))
 
 (define (@get-struct-type db/file name)
   (do-query
     db/file
-    (lambda (db)
-      (let* ((st (sql/transient db get-struct-type-query))
+    (λ (db)
+      (let* ((ps (sql/transient db get-struct-type-query))
              (memspecs*
-               (query fetch-alists st name))
+               (query fetch-alists ps name))
              (extensible
                (= (alist-ref 'extensible (car memspecs*)) 1))
              (memspecs
                (map
-                 (lambda (ms)
+                 (λ (ms)
                    `(,(string->symbol (alist-ref 'rel_name ms))
                      ,(alist-ref 'cardinality ms) ,(alist-ref 'mem_type ms)))
                  memspecs*)))
@@ -397,56 +362,56 @@
 (define (@get-union-type db/file name)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db get-union-type-members-query)))
-        (query fetch-column st name)))))
+    (λ (db)
+      (let ((ps (sql/transient db get-union-type-members-query)))
+        (query fetch-column ps name)))))
 
 (define (@get-string-types db/file)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db get-string-types-query)))
-        (query fetch-column st)))))
+    (λ (db)
+      (let ((ps (sql/transient db get-string-types-query)))
+        (query fetch-column ps)))))
 
 (define (@get-number-types db/file)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db get-number-types-query)))
-        (query fetch-column st)))))
+    (λ (db)
+      (let ((ps (sql/transient db get-number-types-query)))
+        (query fetch-column ps)))))
 
 (define (@get-vocab-types db/file)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db get-vocab-types-query)))
-        (query fetch-column st)))))
+    (λ (db)
+      (let ((ps (sql/transient db get-vocab-types-query)))
+        (query fetch-column ps)))))
 
 (define (@get-struct-types db/file)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db get-struct-types-query)))
-        (query fetch-column st)))))
+    (λ (db)
+      (let ((ps (sql/transient db get-struct-types-query)))
+        (query fetch-column ps)))))
 
 (define (@get-union-types db/file)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db get-union-types-query)))
-        (query fetch-column st)))))
+    (λ (db)
+      (let ((ps (sql/transient db get-union-types-query)))
+        (query fetch-column ps)))))
 
 (define (@get-type-class db/file name)
   (do-query
     db/file
-    (lambda (db)
-      (let ((st (sql/transient db get-type-class-query)))
-        (fetch-value st name)))))
+    (λ (db)
+      (let ((ps (sql/transient db get-type-class-query)))
+        (fetch-value ps name)))))
 
 (define (@get-type db/file name)
   (do-query
     db/file
-    (lambda (db)
+    (λ (db)
       (let ((cls (get-type-class db name)))
         (case (string->symbol cls)
           ((primitive) (string->symbol name))
@@ -466,17 +431,17 @@
 (define (@add-statement db/file s p o t)
   (do-query
     db/file
-    (lambda (db)
+    (λ (db)
       (let ((st-add (sql/transient db add-statement-query)))
         (exec st-add s p o t)))))
 
 (define (@add-statements db/file sts)
   (do-query
     db/file
-    (lambda (db)
+    (λ (db)
       (let ((st-add (sql db add-statement-query)))
         (for-each
-          (lambda (stmt)
+          (λ (stmt)
             (let ((s (car stmt))
                   (p (cadr stmt))
                   (t* (caddr stmt))
@@ -485,7 +450,7 @@
                 (exec st-add s p o t))))
           sts)))))
 
-(define (@delete-statements db/file #!key (s #f) (st #f) (p #f) (o #f) (t #f))
+(define (@delete-statements db/file #!key (s #f) (p #f) (o #f) (t #f))
   (let-values (((q-del params)
                   (cond
                     ((and s p o) (<< delete-statements-spo-query `(,s ,p ,o)))
@@ -502,14 +467,14 @@
                     (else (error "Invalid arguments for delete-statements.")))))
     (do-query
       db/file
-      (lambda (db)
+      (λ (db)
         (let ((st-del (sql/transient db q-del)))
           (apply exec `(,st-del ,@params)))))))
 
 (define (@update-statement-object db/file s p o)
   (do-query
     db/file
-    (lambda (db)
+    (λ (db)
       (let ((st (sql/transient db update-statement-object-query)))
         (exec st s p o)))))
 
@@ -530,7 +495,7 @@
                     (else (error "Invalid arguments for statement-exists?.")))))
     (do-query
       db/file
-      (lambda (db)
+      (λ (db)
         (let ((st-ex (sql/transient db q-ex)))
           (apply exec `(,st-ex ,@params)))))))
 
@@ -566,7 +531,7 @@
                   (else (error "Invalid arguments for get-statements")))))
     (do-query
       db/file
-      (lambda (db)
+      (λ (db)
         (let* ((st-get (sql/transient db q-get))
                (raw-results (apply query `(,fetch-alists ,st-get ,@params))))
           (map object->ext-type raw-results))))))
@@ -630,7 +595,7 @@
       (else
         #f))
     (let ((connection #f))
-      (lambda (cmd . args)
+      (λ (cmd . args)
         (case cmd
           ((connect)
            (set! connection (open-database filename))
