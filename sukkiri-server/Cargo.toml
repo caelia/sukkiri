@@ -1,0 +1,5 @@
+[package]
+
+name = "sukkiri-server"
+version = "0.0.1"
+authors = ["Matt Gushee <matt@gushee.net>"]
