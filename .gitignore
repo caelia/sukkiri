@@ -1,7 +1,5 @@
-*.c
 *.so
 *.o
 *.swp
-*.import.scm
 *.db
 *.log
