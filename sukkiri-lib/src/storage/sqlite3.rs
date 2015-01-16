@@ -22,10 +22,23 @@ impl<'a, 'b> SKStore for SKSqliteStore<'a, 'b> {
         println!("Initializing database.");
     }
     fn connect(&self) {
-        println!("Connecting to {}.", self.path);
+        let conn =
+            match self.conn {
+                Some(&c) => c,
+                None => {
+                    let c = SqliteConnection::open(self.path).unwrap();
+                    self.conn = Some(&c);
+                    c
+                }
+            };
+        println!("Connected to {}.", self.path);
     }
     fn disconnect(&self) {
-        println!("Disconnecting from {}.", self.path);
+        match self.conn {
+            Some(&c) => { c.close(); self.conn = None; true }
+            None => false
+        };
+        println!("Disconnected from {}.", self.path);
     }
 }
 
