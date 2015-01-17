@@ -7,12 +7,12 @@ use rusqlite::SqliteConnection;
 
 pub struct SKSqliteStore<'a, 'b> {
     path: &'a str,
-    conn: Option<&'b SqliteConnection>
+    conn: Option<SqliteConnection>
 }
 
 impl<'a, 'b> SKSqliteStore<'a, 'b> {
     pub fn new(file: &'a str) -> SKSqliteStore {
-        let store = SKSqliteStore { path: file, conn: None };
+        let store = SKSqliteStore { path: file, conn: &None };
         store
     }
 }
@@ -22,13 +22,15 @@ impl<'a, 'b> SKStore for SKSqliteStore<'a, 'b> {
         println!("Initializing database.");
     }
     fn connect(&mut self) {
+        /*
         let conn = match self.conn {
-            Some(c) => c,
-            None => {
-                SqliteConnection::open(self.path).unwrap()
+            &Some(ref c) => c,
+            &None => {
+                &SqliteConnection::open(self.path).unwrap()
             }
         };
-        Some(conn);
+        &Some(*conn);
+        */
         /*
         match self {
             &mut SKSqliteStore { conn: Some(_), .. } => true,
@@ -42,12 +44,15 @@ impl<'a, 'b> SKStore for SKSqliteStore<'a, 'b> {
             }
         };
         */
+        if *self.conn == &None {
+            self.conn = &Some(SqliteConnection::open(self.path).unwrap());
+        }
         println!("Connected to {}.", self.path);
     }
     fn disconnect(&mut self) {
         match self.conn {
-            Some(c) => { c.close(); self.conn = None; true }
-            None => false
+            &Some(c) => { c.close(); self.conn = &None; true }
+            &None => false
         };
         println!("Disconnected from {}.", self.path);
     }
