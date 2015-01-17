@@ -21,21 +21,32 @@ impl<'a, 'b> SKStore for SKSqliteStore<'a, 'b> {
     fn init(&self) {
         println!("Initializing database.");
     }
-    fn connect(&self) {
-        let conn =
-            match self.conn {
-                Some(&c) => c,
-                None => {
-                    let c = SqliteConnection::open(self.path).unwrap();
-                    self.conn = Some(&c);
-                    c
-                }
-            };
+    fn connect(&mut self) {
+        let conn = match self.conn {
+            Some(c) => c,
+            None => {
+                SqliteConnection::open(self.path).unwrap()
+            }
+        };
+        Some(conn);
+        /*
+        match self {
+            &mut SKSqliteStore { conn: Some(_), .. } => true,
+            &mut SKSqliteStore { conn: None, path: p } => {
+                /*
+                let c = SqliteConnection::open(p).unwrap();
+                self.conn = Some(&mut c);
+                */
+                self.conn = Some(&mut SqliteConnection::open(p).unwrap());
+                false
+            }
+        };
+        */
         println!("Connected to {}.", self.path);
     }
-    fn disconnect(&self) {
+    fn disconnect(&mut self) {
         match self.conn {
-            Some(&c) => { c.close(); self.conn = None; true }
+            Some(c) => { c.close(); self.conn = None; true }
             None => false
         };
         println!("Disconnected from {}.", self.path);
