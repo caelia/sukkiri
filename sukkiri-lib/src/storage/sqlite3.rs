@@ -2,8 +2,6 @@ extern crate rusqlite;
 use super::sql_queries::sqlite3 as queries;
 pub use super::base::SKStore;
 use rusqlite::SqliteConnection;
-// mod sql_queries;
-// mod base;
 
 pub struct SKSqliteStore<'a> {
     path: &'a str,
@@ -34,9 +32,12 @@ impl<'a> SKStore for SKSqliteStore<'a> {
     }
     fn disconnect(&mut self) {
         match self.conn {
-            // Some(ref c) => { c.close(); self.conn = None; true }
-            Some(ref c) => { let conn = *c; conn.close(); self.conn = None; true }
-            None => false
+            Some(ref c) => {
+                let conn = *c;
+                conn.close();
+                self.conn = None
+            }
+            None => ()
         };
         println!("Disconnected from {}.", self.path);
     }
