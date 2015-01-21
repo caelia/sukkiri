@@ -1,5 +1,6 @@
 pub trait SKStore {
-    fn init(&self);
-    fn connect(&mut self);
-    fn disconnect(&mut self);
+    //fn connect<T: SKStore>(T) -> T;
+    //fn disconnect<T: SKStore>(T) -> T;
+    fn connect(Self) -> Self;
+    fn disconnect(Self) -> Self;
 }
