@@ -7,5 +7,5 @@ authors = ["Matt Gushee <matt@gushee.net>"]
 
 [dependencies]
 
-rusqlite = "0.0.6"
-rustc-serialize = "0.2.7"
+rusqlite = "0.0.7"
+rustc-serialize = "0.2.8"
