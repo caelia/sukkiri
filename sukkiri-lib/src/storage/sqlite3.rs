@@ -15,26 +15,26 @@ impl<'a> SKSqliteStore<'a> {
 }
 
 impl<'a> SKStore for SKSqliteStore<'a> {
-    fn connect(store: SKSqliteStore<'a>) -> SKSqliteStore<'a> {
+    fn connect(store: SKSqliteStore) -> SKSqliteStore {
         let result = match store.conn {
             Some(_) => store,
             None => {
                 let c = SqliteConnection::open(store.path).unwrap();
-                SKSqliteStore { conn: Some(c), path: store.path }
+                SKSqliteStore { conn: Some(c), path: store.path.clone() }
             }
         };
-        println!("Connected to {}.", store.path);
+        println!("Connected to {}.", result.path);
         result
     }
-    fn disconnect(store: SKSqliteStore<'a>) -> SKSqliteStore<'a> {
+    fn disconnect(store: SKSqliteStore) -> SKSqliteStore {
         let result = match store.conn {
             Some(c) => {
                 c.close();
-                SKSqliteStore { conn: None, path: store.path }
+                SKSqliteStore { conn: None, path: store.path.clone() }
             },
             None => store
         };
-        println!("Disconnected from {}.", store.path);
+        println!("Disconnected from {}.", result.path);
         result
     }
 }
