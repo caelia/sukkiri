@@ -6,7 +6,7 @@ mod storage;
 fn poke_sqlite3(file: &str) {
     // let store = sqlite3::SKSqliteStore::new(file);
     let mut store = SKSqliteStore::new(file);
-    store.init();
+    store.initialize();
     store.connect();
     store.disconnect();
 }
