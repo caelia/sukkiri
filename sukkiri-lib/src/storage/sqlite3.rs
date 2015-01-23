@@ -1,32 +1,32 @@
 extern crate rusqlite;
 use super::sql_queries::sqlite3 as queries;
 pub use super::base::SKStore;
+use std::mem;
 use rusqlite::SqliteConnection;
 use rusqlite::SQLITE_OPEN_READ_ONLY as READ_ONLY;
-// mod sql_queries;
-// mod base;
+use self::OptSqliteConnection::{ReadOnly, ReadWrite, NoConn};
+
+pub enum OptSqliteConnection {
+    ReadOnly(SqliteConnection),
+    ReadWrite(SqliteConnection),
+    NoConn,
+}
+
+impl OptSqliteConnection {
+    fn take(&mut self) -> OptSqliteConnection {
+        mem::replace(self, NoConn)
+    }
+}
 
 pub struct SKSqliteStore<'a> {
     path: &'a str,
-    conn: Option<SqliteConnection>,
-    writeable: bool
+    conn: OptSqliteConnection
 }
 
 impl<'a> SKSqliteStore<'a> {
     pub fn new(file: &'a str) -> SKSqliteStore {
-        let store = SKSqliteStore { path: file, conn: None, writeable: false };
-        store
+        SKSqliteStore { path: file, conn: NoConn }
     }
-    /*
-    fn connect_unsafe(&mut self) {
-        self.conn = Some(SqliteConnection::open_with_flags(self.path, READ_ONLY).unwrap());
-        self.writeable = false;
-    }
-    fn connect_rw_unsafe(&mut self) {
-        self.conn = Some(SqliteConnection::open(self.path).unwrap());
-        self.writeable = true;
-    }
-    */
     fn read_action(self) {
     }
     fn write_action(self) {
@@ -39,48 +39,35 @@ impl<'a> SKStore for SKSqliteStore<'a> {
     }
     fn connect(&mut self) {
         fn connect_unsafe(this: &mut SKSqliteStore) {
-            this.conn = Some(SqliteConnection::open_with_flags(this.path, READ_ONLY).unwrap());
-            this.writeable = false;
+            this.conn = ReadOnly(SqliteConnection::open_with_flags(this.path, READ_ONLY).unwrap());
         }
-        let matchvals = (self.conn, self.writeable);
-        match matchvals {
-            (Some(_), false) => (),
-            (Some(_), true) => {
+        match self.conn {
+            ReadOnly(_) => (),
+            ReadWrite(_) => {
                 self.disconnect();
                 connect_unsafe(self);
             },
-            (None, _) => connect_unsafe(self)
+            NoConn => connect_unsafe(self)
         };
-        /*
-        match self {
-            &SKSqliteStore { conn: Some(_), writeable: false, .. } => (),
-            &SKSqliteStore { conn: Some(_), writeable: true, .. } => {
-                self.disconnect();
-                connect_unsafe(self);
-            },
-            &SKSqliteStore { conn: None, .. } => connect_unsafe(self)
-        };
-        */
     }
     fn connect_rw(&mut self) {
         fn connect_rw_unsafe(this: &mut SKSqliteStore) {
-            this.conn = Some(SqliteConnection::open(this.path).unwrap());
-            this.writeable = true;
+            this.conn = ReadWrite(SqliteConnection::open(this.path).unwrap());
         };
-        match (self.conn, self.writeable) {
-            (Some(_), true) => (),
-            (Some(_), false) => {
+        match self.conn {
+            ReadWrite(_) => (),
+            ReadOnly(_) => {
                 self.disconnect();
                 connect_rw_unsafe(self);
             },
-            (None, _) => connect_rw_unsafe(self)
+            NoConn => connect_rw_unsafe(self)
         };
     }
     fn disconnect(&mut self) {
         let conn = self.conn.take();
         match conn {
-            Some(c) => c.close().unwrap(),
-            None => ()
+            ReadOnly(c) | ReadWrite(c) => c.close().unwrap(),
+            NoConn => ()
         };
     }
 }
