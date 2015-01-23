@@ -2,7 +2,7 @@ extern crate rusqlite;
 use super::sql_queries::sqlite3 as queries;
 pub use super::base::SKStore;
 use std::mem;
-use rusqlite::SqliteConnection;
+use rusqlite::{SqliteConnection, SqliteRows};
 use rusqlite::SQLITE_OPEN_READ_ONLY as READ_ONLY;
 use self::OptSqliteConnection::{ReadOnly, ReadWrite, NoConn};
 
@@ -16,6 +16,31 @@ impl OptSqliteConnection {
     fn take(&mut self) -> OptSqliteConnection {
         mem::replace(self, NoConn)
     }
+    fn expect(self, writeable: bool) -> SqliteConnection {
+        match self {
+            ReadWrite(c) => {
+                if writeable {
+                    c
+                } else {
+                    panic!("Expected ReadOnly connection, ReadWrite found.");
+                }
+            },
+            ReadOnly(c) => {
+                if writeable {
+                    panic!("Expected ReadWrite connection, ReadOnly found.");
+                } else {
+                    c
+                }
+            },
+            NoConn => {
+                if writeable {
+                    panic!("Expected ReadWrite connection, no connection found.");
+                } else {
+                    panic!("Expected ReadOnly connection, no connection found.");
+                }
+            }
+        }
+    }
 }
 
 pub struct SKSqliteStore<'a> {
@@ -27,9 +52,20 @@ impl<'a> SKSqliteStore<'a> {
     pub fn new(file: &'a str) -> SKSqliteStore {
         SKSqliteStore { path: file, conn: NoConn }
     }
-    fn read_action(self) {
+    fn read_action<'b, F: Fn(SqliteConnection) -> SqliteRows<'b>>(&mut self, f: F) -> SqliteRows<'b> {
+        self.connect();
+        let konn = self.conn.expect(false);
+        f(konn)
     }
-    fn write_action(self) {
+    fn write_action<F: Fn(SqliteConnection)>(&mut self, f: F) {
+        self.connect_rw();
+        let konn = self.conn.expect(true);
+        f(konn)
+    }
+    fn rw_action<'b, F: Fn(SqliteConnection) -> SqliteRows<'b>>(&mut self, f: F) -> SqliteRows<'b> {
+        self.connect_rw();
+        let konn = self.conn.expect(true);
+        f(konn)
     }
 }
 
