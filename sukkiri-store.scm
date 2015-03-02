@@ -136,8 +136,7 @@
   "CREATE TABLE string_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    pattern TEXT NOT NULL,
-    description TEXT
+    pattern TEXT NOT NULL
   );")
 
 (define create-number-type-table-query
@@ -147,8 +146,7 @@
     minval FLOAT,
     maxval FLOAT,
     step FLOAT,
-    digits INTEGER,
-    description TEXT
+    digits INTEGER
   );")
 
 (define create-vocab-table-query
@@ -174,8 +172,7 @@
   "CREATE TABLE struct_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    extensible INTEGER default 0,
-    description TEXT
+    extensible INTEGER default 0
   );")
 
 (define create-type-class-table-query
@@ -196,7 +193,8 @@
   "CREATE TABLE types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
-    class INTEGER REFERENCES type_classes(id)
+    class INTEGER REFERENCES type_classes(id),
+    description TEXT
   );")
 
 (define populate-types-table-queries
@@ -305,17 +303,17 @@
 ;;; ------  Queries  -------------------------------------------------------
 
 (define add-string-type-query
-  "INSERT INTO string_types (name, pattern, description) VALUES (?, ?, ?);")
+  "INSERT INTO string_types (name, pattern) VALUES (?, ?);")
 
 (define add-number-type-query
-  "INSERT INTO number_types (name, minval, maxval, step, digits, description)
-   VALUES (?, ?, ?, ?, ?, ?);")
+  "INSERT INTO number_types (name, minval, maxval, step, digits)
+   VALUES (?, ?, ?, ?, ?);")
 
 (define add-vocab-type-term-query
   "INSERT INTO vocab_types (name, term) VALUES (?, ?);")
 
 (define add-struct-type-query
-  "INSERT INTO struct_types (name, extensible, description) VALUES (?, ?, ?);")
+  "INSERT INTO struct_types (name, extensible) VALUES (?, ?);")
 
 (define add-struct-member-query
   "INSERT INTO struct_type_members (struct_type, rel_name, cardinality, mem_type)
@@ -328,8 +326,8 @@
     SELECT ?, id FROM types WHERE types.name = ?;")
 
 (define add-type-query
-  "INSERT INTO types (name, class)
-    SELECT ?, id FROM type_classes WHERE type_classes.name = ?;")
+  "INSERT INTO types (name, class, description)
+    SELECT ?, id FROM type_classes, ? WHERE type_classes.name = ?;")
 
 (define update-string-type-query
   "UPDATE string_types SET pattern = ? WHERE name = ?;")
@@ -476,9 +474,10 @@
           (commit db))
         (close-database db)))))
 
-(define (add-general-type db name class)
+(define (add-general-type db name class description)
   (let ((st (sql/transient db add-type-query)))
-    (exec st name class))
+    (exec st name description class))
+  ;; FIXME - This seems a little weird. Really?
   (unless (string=? class "union")
     (update-union-type db "any" members+: `(,name))))
 
@@ -493,8 +492,8 @@
     db/file
     (lambda (db)
       (let ((st (sql/transient db add-string-type-query)))
-        (exec st name pattern description))
-      (add-general-type db name "string"))))
+        (exec st name pattern))
+      (add-general-type db name "string" description))))
 
 (define (add-number-type db/file name #!key (minval '()) (maxval '())
                                             (step '()) (digits '())
@@ -503,10 +502,10 @@
     db/file
     (lambda (db)
       (let ((st (sql/transient db add-number-type-query)))
-        (exec st name minval maxval step digits description))
-      (add-general-type db name "number"))))
+        (exec st name minval maxval step digits))
+      (add-general-type db name "number" description))))
 
-(define (add-vocab-type db/file name terms)
+(define (add-vocab-type db/file name terms #!optional (description '()))
   (do-query
     db/file
     (lambda (db)
@@ -514,7 +513,7 @@
         (for-each
           (lambda (term) (exec st name term))
           terms))
-      (add-general-type db name "vocab"))))
+      (add-general-type db name "vocab" description))))
 
 (define (add-struct-type db/file name #!key (extensible #t) (members '())
                                             (description '()))
@@ -523,14 +522,14 @@
     (lambda (db)
       (let ((st-main (sql/transient db add-struct-type-query))
             (st-mem (sql db add-struct-member-query)))
-        (exec st-main name (if extensible 1 0) description)
+        (exec st-main name (if extensible 1 0))
         (for-each
           (lambda (mem)
             (exec st-mem (symbol->string (car mem)) name (cadr mem) (caddr mem)))
           members))
-        (add-general-type db name "struct"))))
+        (add-general-type db name "struct" description))))
 
-(define (add-union-type db/file name members)
+(define (add-union-type db/file name members #!optional (description '()))
   (do-query
     db/file
     (lambda (db)
@@ -538,7 +537,7 @@
         (for-each
           (lambda (mem) (exec st name mem))
           members))
-      (add-general-type db name "union"))))
+      (add-general-type db name "union" description))))
 
 (define (update-string-type db/file name pattern)
   (do-query
