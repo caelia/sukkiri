@@ -327,7 +327,7 @@
 
 (define add-type-query
   "INSERT INTO types (name, class, description)
-    SELECT ?, id FROM type_classes, ? WHERE type_classes.name = ?;")
+    SELECT ?, id, ? FROM type_classes WHERE type_classes.name = ?;")
 
 (define update-string-type-query
   "UPDATE string_types SET pattern = ? WHERE name = ?;")
