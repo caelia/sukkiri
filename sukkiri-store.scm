@@ -477,7 +477,6 @@
 (define (add-general-type db name class description)
   (let ((st (sql/transient db add-type-query)))
     (exec st name description class))
-  ;; FIXME - This seems a little weird. Really?
   (unless (string=? class "union")
     (update-union-type db "any" members+: `(,name))))
 
