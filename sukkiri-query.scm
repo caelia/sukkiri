@@ -6,22 +6,40 @@
 (module sukkiri-query
         *
         (import scheme chicken)
-        (use sukkiri-base)
-        (use sukkiri-store)
-        (use sukkiri-data)
+        (use (prefix sukkiri-base b:))
+        (use (prefix sukkiri-store s:))
+        (use (prefix sukkiri-data d:))
 
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ------------------------------------------------------------------------
 
-(define (typedef))
+(define (simple-query store query)
+  #f)
 
-(define (create))
+(define (create-type store name class typespec #!optional description)
+  #f)
 
-(define (update))
+(define (get-type store name)
+  #f)
+
+(define (update-type store name typespec)
+  #f)
+
+(define (delete-type store name #!key (allow-orphans #f) (cascade #f))
+  #f)
+
+(define (create-struct store type members)
+  #f)
+
+(define (update-struct store id members)
+  #f)
+
+(define (delete-struct store id)
+  #f)
 
 ;;; OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
 
-(define ())
+;;; ========================================================================
 )
 ;;; IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 ;;; ------------------------------------------------------------------------
